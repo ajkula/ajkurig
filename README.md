@@ -8,6 +8,7 @@ Ajkula's rig: a Go + Ebitengine framework for arcade games, extracted from Horde
 go run ./examples/discs        play the example
 go test ./...                  every test (headless, no window needed)
 go run ./cmd/tracker           the tracker editor
+go run ./cmd/spriteedit hero.spr   the sprite editor
 go run ./cmd/release -config examples/discs/release.json   build the example's archives
 ```
 
@@ -54,6 +55,7 @@ Modules run in mount order. `Enable(name, false)` pauses one, `Unmount(name)` re
 | `fx` | Particles, rings, bolts, smoke, popups, screen shake, skid marks, weather rendering |
 | `world` | Ground materials and their reactions, statuses and reactions between elements, weather |
 | `procanim` | Servo, springs, two-bone IK, leg gait |
+| `sprite` | Pixel sprites made of parts on a skeleton: text format, key poses, computed in-betweens, pixel-art rotation, baked frames, `Bake` into Ebitengine images |
 | `progress` | Experience curve, offer deck |
 | `scores` | High score table, name entry, formatting |
 | `intro` | The GREG's intro: voxel logo, fall, impact, shattered glass |
@@ -83,6 +85,12 @@ A song is a `.trk` text file: instruments, 16 channels, patterns, and `layer <ch
 `go run ./cmd/tracker -game path/to/song.trk` edits a song with live preview, mute and solo, presets, and sliders for each signal of the song.
 
 Sounds are `audio.SoundDefinition` values added to a `SoundBank` (`bank.Add` gives an id). The framework's own sounds (menu, voice chirp, intro) come first and can be replaced with `bank.Replace`.
+
+## Sprites
+
+A sprite is a `.spr` text file: a size, a palette (one character per colour), parts drawn as pixel grids in their rest position, each with a joint pixel and a parent, and animations. A frame is either a key pose (an angle and a move per part) or an in-between computed from the keys around it; any frame can be baked into plain pixels and retouched. Turned parts are drawn with a RotSprite-style rotation (Scale2x three times, then nearest sampling), quarter turns stay exact.
+
+`go run ./cmd/spriteedit -size 48x64 path/hero.spr` opens or creates a sprite: draw the parts in the rest view, place their joints, pose the keys, add in-betweens, bake and retouch. The file reloads by itself when edited elsewhere. In the game, `sprite.Load(files, "hero.spr")` then `sprite.Bake(sheet).Clips["punch"].FrameAt(tick)` gives the image to draw.
 
 ## World systems
 

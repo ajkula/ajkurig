@@ -6,6 +6,7 @@ Le rig d'Ajkula : un framework Go + Ebitengine pour jeux d'arcade, extrait de Ho
 go run ./examples/discs        jouer à l'exemple
 go test ./...                  tous les tests (sans fenêtre)
 go run ./cmd/tracker           l'éditeur de musique
+go run ./cmd/spriteedit hero.spr   l'éditeur de sprites
 go run ./cmd/release -config examples/discs/release.json   les archives de l'exemple
 ```
 
@@ -36,6 +37,7 @@ Les modules tournent dans l'ordre de montage ; `Enable`, `Unmount` et `Find` les
 - **Sons** : banque de sons synthétisés, ids, intervalle minimum ; ceux du framework (menus, voix, intro) sont remplaçables.
 - **Monde** : sol en matériaux qui réagissent (l'herbe brûle, laisse de la cendre, repousse ; l'eau gèle ; la propagation augmente en canicule), statuts et réactions, météo.
 - **Animation procédurale** : servo, ressorts, IK à deux os, démarche de pattes.
+- **Sprites en pixels** : fichier texte `.spr`, pièces sur un squelette, poses clés, intermédiaires calculés (rotation pixel art), images figées retouchables ; éditeur `cmd/spriteedit`.
 - **Écrans** : intro GREG's, menu sur démo d'attraction et classement, options, graphismes, audio, playlist, commandes (clavier, souris, manette, deux sticks), langue, pause, montée de niveau, initiales, game over.
 - **Progression** : courbe d'XP, cartes de bonus ; l'affichage est remplaçable.
 - **Bulles de dialogue** : texte qui défile sur un fond léger, avec voix, largeur et opacité réglables.
