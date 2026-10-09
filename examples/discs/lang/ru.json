@@ -1,0 +1,22 @@
+{
+  "code": "ru",
+  "strings": {
+    "action.dash": "РЫВОК",
+    "action.fire": "ОГОНЬ",
+    "bench.ground": "Клетки поля  %d",
+    "bench.particles": "Частицы  %d",
+    "bench.reactions": "Реакции  %d",
+    "hud.level": "Ур %d",
+    "passive.haste": "Спешка",
+    "passive.haste.description": "-8% к перезарядке оружия.",
+    "passive.might": "Мощь",
+    "passive.might.description": "+12% к урону, включая реакции.",
+    "passive.swiftness": "Проворство",
+    "passive.swiftness.description": "+10% к скорости движения.",
+    "passive.vitality": "Живучесть",
+    "passive.vitality.description": "+20 к макс. здоровью и лечение на 20.",
+    "weather.blizzard": "БУРАН",
+    "weather.heatwave": "ЗНОЙ",
+    "weather.storm": "ГРОЗА"
+  }
+}

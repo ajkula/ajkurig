@@ -1,0 +1,22 @@
+{
+  "code": "zh",
+  "strings": {
+    "action.dash": "冲刺",
+    "action.fire": "射击",
+    "bench.ground": "地形格  %d",
+    "bench.particles": "粒子  %d",
+    "bench.reactions": "反应  %d",
+    "hud.level": "Lv %d",
+    "passive.haste": "迅捷",
+    "passive.haste.description": "武器冷却时间 -8%。",
+    "passive.might": "威力",
+    "passive.might.description": "伤害 +12%，含反应伤害。",
+    "passive.swiftness": "敏捷",
+    "passive.swiftness.description": "移动速度 +10%。",
+    "passive.vitality": "活力",
+    "passive.vitality.description": "最大生命 +20，并恢复 20。",
+    "weather.blizzard": "暴风雪",
+    "weather.heatwave": "热浪",
+    "weather.storm": "风暴"
+  }
+}

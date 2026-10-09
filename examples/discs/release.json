@@ -1,0 +1,7 @@
+{
+  "name": "Discs",
+  "binary": "discs",
+  "package": "./examples/discs",
+  "bundleId": "io.github.ajkula.discs",
+  "category": "public.app-category.action-games"
+}

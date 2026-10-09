@@ -1,0 +1,22 @@
+{
+  "code": "es",
+  "strings": {
+    "action.dash": "IMPULSO",
+    "action.fire": "DISPARO",
+    "bench.ground": "Celdas de terreno  %d",
+    "bench.particles": "Partículas  %d",
+    "bench.reactions": "Reacciones  %d",
+    "hud.level": "Nv %d",
+    "passive.haste": "Celeridad",
+    "passive.haste.description": "-8 % de recarga de armas.",
+    "passive.might": "Poder",
+    "passive.might.description": "+12 % de daño, reacciones incluidas.",
+    "passive.swiftness": "Rapidez",
+    "passive.swiftness.description": "+10 % de velocidad de movimiento.",
+    "passive.vitality": "Vitalidad",
+    "passive.vitality.description": "+20 de vida máxima y cura 20.",
+    "weather.blizzard": "VENTISCA",
+    "weather.heatwave": "OLA DE CALOR",
+    "weather.storm": "TORMENTA"
+  }
+}

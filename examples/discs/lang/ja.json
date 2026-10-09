@@ -1,0 +1,22 @@
+{
+  "code": "ja",
+  "strings": {
+    "action.dash": "ダッシュ",
+    "action.fire": "射撃",
+    "bench.ground": "地形セル  %d",
+    "bench.particles": "パーティクル  %d",
+    "bench.reactions": "反応  %d",
+    "hud.level": "Lv %d",
+    "passive.haste": "加速",
+    "passive.haste.description": "武器のクールダウン -8%。",
+    "passive.might": "威力",
+    "passive.might.description": "ダメージ +12%、反応にも有効。",
+    "passive.swiftness": "俊敏",
+    "passive.swiftness.description": "移動速度 +10%。",
+    "passive.vitality": "活力",
+    "passive.vitality.description": "最大HP +20、HPを20回復。",
+    "weather.blizzard": "猛吹雪",
+    "weather.heatwave": "猛暑",
+    "weather.storm": "嵐"
+  }
+}

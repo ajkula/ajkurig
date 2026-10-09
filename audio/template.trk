@@ -1,0 +1,63 @@
+# ajkurig default instrument kit and adaptive layers.
+# ComposeSong reads the instruments, pans, layers, tempoboost and intensity of a
+# template; its patterns are ignored. Copy this file into a game to start a song.
+#
+# Cell: NOTE INSTRUMENT EFFECT   e.g.  C-4 05 037
+#   NOTE        C-4, C#4 ... B-9   --- = nothing   === = note off
+#   INSTRUMENT  two digits (01..31)   .. = keep
+#   EFFECT      0xy arpeggio (+x, +y semitones)   Cxx volume (hex 00..40)   ... = none
+#
+# Channel roles used by the composer and the arranger:
+#   1 drums  2 bass  3 hihat  4 chords  5 lead  6-8 tension voices  9 bells  10 pulse
+#   11 shaker  12 clap  13 pad  14 pluck  15 offbeat  16 harmony (11-16 written by the arranger)
+#
+# Adaptive layers: a channel is heard while its signal reaches the threshold.
+# Signal names are free: the game sets them by name on the audio engine.
+
+title Template
+tempo 125
+tempoboost 18
+speed 6
+pan 0.5 0.5 0.68 0.34 0.63 0.5 0.5 0.5 0.3 0.7 0.74 0.44 0.5 0.36 0.62 0.4
+intensity action tension danger
+
+instrument 1  kick     sine      attack 0.001 decay 0.16 volume 1.0 slide -7
+instrument 2  snare    noise     attack 0.001 decay 0.12 volume 0.5 filter 0.2
+instrument 3  hihat    noise     attack 0.001 decay 0.035 volume 0.2 filter 0.05
+instrument 4  bass     saw       attack 0.004 decay 0.18 sustain 0.55 release 0.05 volume 0.45 filter 0.8 sub 0.6 drive 0.8
+instrument 5  chords   square    attack 0.004 decay 0.25 sustain 0.5 release 0.08 volume 0.14 duty 0.25
+instrument 6  lead     square    attack 0.01 decay 0.2 sustain 0.7 release 0.12 volume 0.18 duty 0.5
+instrument 7  stab     saw       attack 0.002 decay 0.3 volume 0.42 filter 0.38 slide -0.3 sub 0.7 detune 0.1
+instrument 8  growl    square    attack 0.03 decay 0.4 sustain 0.65 release 0.25 volume 0.4 duty 0.3 filter 0.6 sub 0.8 detune 0.08
+instrument 9  drone    saw       attack 0.08 decay 0.5 sustain 0.85 release 0.35 volume 0.46 filter 0.74 sub 0.9 detune 0.15
+instrument 10 bell     triangle  attack 0.001 decay 0.18 volume 0.2
+instrument 11 pulse    square    attack 0.002 decay 0.1 volume 0.14 duty 0.125
+instrument 12 shaker   noise     attack 0.001 decay 0.025 volume 0.11 filter 0.02
+instrument 13 clap     noise     attack 0.002 decay 0.09 volume 0.26 filter 0.35
+instrument 14 pad      saw       attack 0.35 decay 0.6 sustain 0.8 release 0.6 volume 0.075 filter 0.88 detune 0.12
+instrument 15 pluck    square    attack 0.001 decay 0.11 volume 0.085 duty 0.25 filter 0.4
+instrument 16 offbeat  square    attack 0.002 decay 0.07 volume 0.08 duty 0.5 filter 0.5
+instrument 17 harmony  triangle  attack 0.01 decay 0.2 sustain 0.6 release 0.12 volume 0.11
+
+#     channel  signal     threshold
+layer 1        always     0
+layer 2        always     0
+layer 3        action     0.15
+layer 4        action     0.35
+layer 5        action     0.6
+layer 6        tension    1
+layer 7        tension    2
+layer 8        tension    3
+layer 9        combo      0.3
+layer 10       danger     0.5
+layer 11       always     0
+layer 12       action     0.2
+layer 13       always     0
+layer 14       action     0.3
+layer 15       action     0.5
+layer 16       action     0.7
+
+order 0
+
+pattern 0
+C-3 01 ... | D-2 04 ... | C-9 03 C30 | D-4 05 037 | A-5 06 ... | D-2 07 ... | A-1 08 ... | D-1 09 ... | D-6 10 ... | D-3 11 C40

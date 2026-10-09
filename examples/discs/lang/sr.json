@@ -1,0 +1,22 @@
+{
+  "code": "sr",
+  "strings": {
+    "action.dash": "ЈУРИШ",
+    "action.fire": "ПУЦАЊ",
+    "bench.ground": "Поља терена  %d",
+    "bench.particles": "Честице  %d",
+    "bench.reactions": "Реакције  %d",
+    "hud.level": "Ниво %d",
+    "passive.haste": "Хитрина",
+    "passive.haste.description": "-8% времена пуњења оружја.",
+    "passive.might": "Моћ",
+    "passive.might.description": "+12% штете, укључујући реакције.",
+    "passive.swiftness": "Брзина",
+    "passive.swiftness.description": "+10% брзине кретања.",
+    "passive.vitality": "Виталност",
+    "passive.vitality.description": "+20 макс. здравља и лечи 20.",
+    "weather.blizzard": "МЕЋАВА",
+    "weather.heatwave": "ТОПЛОТНИ ТАЛАС",
+    "weather.storm": "ОЛУЈА"
+  }
+}

@@ -1,0 +1,22 @@
+{
+  "code": "hi",
+  "strings": {
+    "action.dash": "डैश",
+    "action.fire": "फ़ायर",
+    "bench.ground": "ज़मीन के खाने  %d",
+    "bench.particles": "कण  %d",
+    "bench.reactions": "प्रतिक्रियाएँ  %d",
+    "hud.level": "स्तर %d",
+    "passive.haste": "तेज़ी",
+    "passive.haste.description": "हथियारों का कूलडाउन -8%।",
+    "passive.might": "शक्ति",
+    "passive.might.description": "नुकसान +12%, प्रतिक्रियाओं सहित।",
+    "passive.swiftness": "फुर्ती",
+    "passive.swiftness.description": "चलने की गति +10%।",
+    "passive.vitality": "जीवनशक्ति",
+    "passive.vitality.description": "अधिकतम जीवन +20 और 20 उपचार।",
+    "weather.blizzard": "बर्फ़ीला तूफ़ान",
+    "weather.heatwave": "लू",
+    "weather.storm": "आँधी"
+  }
+}

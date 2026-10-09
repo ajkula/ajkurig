@@ -1,0 +1,22 @@
+{
+  "code": "ko",
+  "strings": {
+    "action.dash": "대시",
+    "action.fire": "사격",
+    "bench.ground": "지형 칸  %d",
+    "bench.particles": "파티클  %d",
+    "bench.reactions": "반응  %d",
+    "hud.level": "Lv %d",
+    "passive.haste": "가속",
+    "passive.haste.description": "무기 재사용 대기시간 -8%.",
+    "passive.might": "위력",
+    "passive.might.description": "피해 +12%, 반응 포함.",
+    "passive.swiftness": "신속",
+    "passive.swiftness.description": "이동 속도 +10%.",
+    "passive.vitality": "활력",
+    "passive.vitality.description": "최대 체력 +20, 체력 20 회복.",
+    "weather.blizzard": "눈보라",
+    "weather.heatwave": "폭염",
+    "weather.storm": "폭풍"
+  }
+}
