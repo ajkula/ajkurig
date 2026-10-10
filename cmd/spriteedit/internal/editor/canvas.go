@@ -2,7 +2,9 @@ package editor
 
 import (
 	"fmt"
+	"image/color"
 	"math"
+	"slices"
 
 	"ajkurig/mathx"
 	"ajkurig/sprite"
@@ -11,16 +13,23 @@ import (
 // ===== Types =====
 
 type drag struct {
-	isActive    bool
-	isShifting  bool
-	lastX       int
-	lastY       int
-	pivotX      float64
-	pivotY      float64
-	startAngle  float64
-	startJoint  sprite.Joint
-	startMouseX float64
-	startMouseY float64
+	isActive        bool
+	tool            Tool
+	isShifting      bool
+	lastX           int
+	lastY           int
+	pivotX          float64
+	pivotY          float64
+	startAngle      float64
+	startJoint      sprite.Joint
+	startMouseX     float64
+	startMouseY     float64
+	twin            int
+	twinStart       sprite.Joint
+	isTipDrag       bool
+	selectionStart  sprite.Pose
+	startReferenceX float64
+	startReferenceY float64
 }
 
 // ===== Constants =====
@@ -29,25 +38,39 @@ const (
 	onionAlpha      = 0.3
 	gridMinimumZoom = 6
 	pivotMarkSize   = 5
+	ghostAlpha      = 0.35
+	boneGrabRange   = 2.5
+	hangerPriority  = 0.75
+	boneWidth       = 3
 )
 
 var toolStarts = [...]func(e *Editor){
 	ToolPencil: (*Editor).startPaint,
 	ToolFill:   (*Editor).fillAtMouse,
 	ToolPicker: (*Editor).pickAtMouse,
-	ToolPivot:  (*Editor).placePivot,
+	ToolBone:   (*Editor).startBone,
 	ToolPose:   (*Editor).startPose,
+	ToolHand:   (*Editor).startPan,
+	ToolTrace:  (*Editor).startTrace,
+	ToolPlace:  (*Editor).startPlace,
 }
 
 var toolMoves = [...]func(e *Editor){
 	ToolPencil: (*Editor).continuePaint,
 	ToolFill:   func(*Editor) {},
 	ToolPicker: (*Editor).pickAtMouse,
-	ToolPivot:  (*Editor).placePivot,
+	ToolBone:   (*Editor).continueBone,
 	ToolPose:   (*Editor).continuePose,
+	ToolHand:   (*Editor).continuePan,
+	ToolTrace:  (*Editor).continueTrace,
+	ToolPlace:  (*Editor).continuePlace,
 }
 
-var historyFreeTools = [...]bool{ToolPicker: true}
+var toolFinishes = [toolCount]func(e *Editor){ToolTrace: (*Editor).finishTrace}
+
+var historyFreeTools = [toolCount]bool{ToolPicker: true, ToolHand: true, ToolTrace: true}
+
+var ghostingTools = [toolCount]bool{ToolPencil: true, ToolFill: true, ToolBone: true}
 
 var poseMoves = [2]func(e *Editor, joint sprite.Joint, mouseX, mouseY float64) sprite.Joint{
 	(*Editor).turnedJoint,
@@ -57,25 +80,46 @@ var poseMoves = [2]func(e *Editor, joint sprite.Joint, mouseX, mouseY float64) s
 // ===== Input =====
 
 func (e *Editor) handleCanvas() {
-	isPressed := (e.ui.IsClicked || e.ui.IsRightClicked) && e.canvasRect.Contains(e.ui.MouseX, e.ui.MouseY)
+	isPressed := (e.ui.IsClickFree() || e.ui.IsRightClicked) && viewRect.Contains(e.ui.MouseX, e.ui.MouseY)
+	if isPressed && e.ui.IsHelping {
+		e.ui.Pick(toolFeatures[e.activeTool()])
+		return
+	}
+	if isPressed && e.ui.IsControlDown && selectingTools[e.tool] {
+		e.toggleBoneUnderMouse()
+		return
+	}
 	if isPressed && !e.ui.IsTyping() {
 		e.beginDrag()
 	}
 	isHeld := e.ui.IsMouseDown || e.ui.IsRightDown
 	if !isHeld || !e.drag.isActive {
-		e.drag.isActive = false
+		e.finishDrag()
 		return
 	}
-	toolMoves[e.activeTool()](e)
+	toolMoves[e.drag.tool](e)
+}
+
+func (e *Editor) finishDrag() {
+	finish := toolFinishes[e.drag.tool]
+	if e.drag.isActive && finish != nil {
+		finish(e)
+	}
+	e.drag.isActive = false
 }
 
 func (e *Editor) beginDrag() {
 	tool := e.activeTool()
-	e.drag.isActive = true
-	if !historyFreeTools[tool] {
+	e.drag.isActive, e.drag.tool = true, tool
+	if e.isRecorded(tool) {
 		e.record()
 	}
 	toolStarts[tool](e)
+}
+
+func (e *Editor) isRecorded(tool Tool) bool {
+	isFreePosing := tool == ToolPose && e.mode == ModePoses
+	return !historyFreeTools[tool] && !isFreePosing
 }
 
 func (e *Editor) activeTool() Tool {
@@ -148,13 +192,62 @@ func (e *Editor) pickAtMouse() {
 	if !isInside {
 		return
 	}
-	e.colorIndex = e.composed[y*e.sheet.Width+x]
+	copy(e.pickPixels, e.composed)
+	if !e.isEditingBakedFrame() {
+		e.sheet.Render(e.pose, e.pickPixels)
+	}
+	e.colorIndex = e.pickPixels[y*e.sheet.Width+x]
 }
 
 func (e *Editor) placePivot() {
 	x, y := e.mousePixel()
 	partX, partY := e.toPartSpace(x, y)
-	e.currentPart().Pivot = sprite.Point{X: partX, Y: partY}
+	part := e.currentPart()
+	part.Pivot = sprite.Point{X: partX, Y: partY}
+	part.Tip = part.Pivot
+}
+
+func (e *Editor) startBone() {
+	e.drag.isTipDrag = e.grabTipUnderMouse()
+	if e.drag.isTipDrag {
+		return
+	}
+	e.placePivot()
+}
+
+func (e *Editor) continueBone() {
+	if e.drag.isTipDrag {
+		e.dragTip()
+		return
+	}
+	e.placeTip()
+}
+
+func (e *Editor) grabTipUnderMouse() bool {
+	x, y := e.mouseCanvas()
+	best, bestDistance := -1, boneGrabRange
+	for index, ends := range e.boneEnds {
+		distance := math.Hypot(x-ends[1][0], y-ends[1][1])
+		best, bestDistance = pickCloser(distance < bestDistance, index, distance, best, bestDistance)
+	}
+	if best < 0 {
+		return false
+	}
+	e.selectOnly(best)
+	e.resolvePose()
+	return true
+}
+
+func (e *Editor) dragTip() {
+	x, y := e.mousePixel()
+	partX, partY := e.toPartSpace(x, y)
+	e.sheet.MoveTip(e.partIndex, sprite.Point{X: partX, Y: partY})
+}
+
+func (e *Editor) placeTip() {
+	x, y := e.mousePixel()
+	partX, partY := e.toPartSpace(x, y)
+	e.currentPart().Tip = sprite.Point{X: partX, Y: partY}
 }
 
 func (e *Editor) toPartSpace(x, y int) (int, int) {
@@ -170,23 +263,60 @@ func (e *Editor) startPose() {
 		e.notify("Posing works on frames that are not baked, outside the rest view", colorDanger)
 		return
 	}
-	frame := e.makeKey()
+	e.grabBoneUnderMouse()
+	pose := *e.posingTarget()
+	e.drag.selectionStart = slices.Clone(pose)
+	e.drag.twin = e.twinOf(e.partIndex)
+	e.drag.twinStart = jointAtOrZero(pose, e.drag.twin)
 	e.drag.pivotX, e.drag.pivotY = e.transforms[e.partIndex].Apply(sprite.PixelCenter(e.currentPart().Pivot))
 	e.drag.startMouseX, e.drag.startMouseY = e.mouseCanvas()
 	e.drag.startAngle = e.angleFromPivot(e.drag.startMouseX, e.drag.startMouseY)
-	e.drag.startJoint = frame.Pose[e.partIndex]
+	e.drag.startJoint = pose[e.partIndex]
 	e.drag.isShifting = isShiftHeld()
 }
 
 func (e *Editor) continuePose() {
-	frame := e.currentFrame()
+	pose := *e.posingTarget()
 	mouseX, mouseY := e.mouseCanvas()
-	frame.Pose = e.sheet.Grow(frame.Pose)
-	frame.Pose[e.partIndex] = poseMoves[mathx.BoolToIndex(e.drag.isShifting)](e, e.drag.startJoint, mouseX, mouseY)
+	moved := poseMoves[mathx.BoolToIndex(e.drag.isShifting)](e, e.drag.startJoint, mouseX, mouseY)
+	pose[e.partIndex] = moved
+	e.applyLink(pose, e.drag.twin, e.drag.twinStart, e.drag.startJoint, moved)
+	e.carrySelection(pose, e.drag.selectionStart, e.drag.startJoint, moved)
+}
+
+func (e *Editor) boneUnderMouse() int {
+	x, y := e.mouseCanvas()
+	best, bestDistance := -1, boneGrabRange
+	for index, ends := range e.grabEnds {
+		distance := sprite.SegmentDistance(x, y, ends) - hangerPriority*float64(mathx.BoolToIndex(e.isHanger(index))) + boneGrabRange*float64(mathx.BoolToIndex(e.isHiddenHanger(index)))
+		best, bestDistance = pickCloser(distance < bestDistance, index, distance, best, bestDistance)
+	}
+	return best
+}
+
+func (e *Editor) grabBoneUnderMouse() {
+	best := e.boneUnderMouse()
+	if best < 0 {
+		return
+	}
+	if !e.isSelected(best) {
+		e.selectOnly(best)
+	}
+	e.partIndex = best
+	e.resolvePose()
+}
+
+func (e *Editor) toggleBoneUnderMouse() {
+	best := e.boneUnderMouse()
+	if best < 0 {
+		return
+	}
+	e.keepSelectionSized()
+	e.toggleSelected(best)
 }
 
 func (e *Editor) turnedJoint(joint sprite.Joint, mouseX, mouseY float64) sprite.Joint {
-	joint.Angle = normalizeAngle(math.Round(joint.Angle + e.angleFromPivot(mouseX, mouseY) - e.drag.startAngle))
+	joint.Angle = e.limitAngle(e.partIndex, math.Round(joint.Angle+e.angleFromPivot(mouseX, mouseY)-e.drag.startAngle))
 	return joint
 }
 
@@ -206,6 +336,8 @@ func (e *Editor) renderImages() {
 	e.composeCurrent()
 	e.sheet.WriteRGBA(e.composed, e.rgba)
 	e.canvasImage.WritePixels(e.rgba)
+	e.sheet.WriteRGBA(e.ghostPixels, e.rgba)
+	e.ghostImage.WritePixels(e.rgba)
 	animation := e.currentAnimation()
 	count := len(animation.Frames)
 	e.sheet.RenderFrame(animation, (e.frameIndex-1+count)%count, e.onionPixels)
@@ -218,25 +350,42 @@ func (e *Editor) renderImages() {
 }
 
 func (e *Editor) composeCurrent() {
+	clear(e.ghostPixels)
 	if e.isEditingBakedFrame() {
 		copy(e.composed, e.currentFrame().Pixels)
 		return
 	}
 	e.sheet.RenderSelection(e.pose, e.isPartShown, e.composed)
+	if e.isGhosting() {
+		e.sheet.RenderSelection(e.pose, e.isGhostPart, e.ghostPixels)
+	}
+}
+
+func (e *Editor) isGhosting() bool {
+	return e.isGhost && !e.isSolo && ghostingTools[e.tool]
 }
 
 func (e *Editor) isPartShown(index int) bool {
-	return !e.isSolo || index == e.partIndex
+	return !(e.isSolo || e.isGhosting()) || index == e.partIndex
+}
+
+func (e *Editor) isGhostPart(index int) bool {
+	return index != e.partIndex
 }
 
 func (e *Editor) layoutCanvas() {
+	e.ui.Clip(viewRect)
 	e.ui.Image(e.canvasRect, e.checkerImage, 1)
+	e.layoutReference()
 	isOnionShown := e.isOnion && !e.isRestView && len(e.currentAnimation().Frames) > 1
 	e.ui.Image(e.canvasRect, e.onionImage, onionAlpha*float32(mathx.BoolToIndex(isOnionShown)))
+	e.ui.Image(e.canvasRect, e.ghostImage, ghostAlpha)
 	e.ui.Image(e.canvasRect, e.canvasImage, 1)
 	e.layoutGrid()
+	e.layoutBones()
 	e.layoutPivots()
 	e.ui.Outline(Rect{e.canvasRect.X - 1, e.canvasRect.Y - 1, e.canvasRect.W + 2, e.canvasRect.H + 2}, colorEdge)
+	e.ui.Unclip()
 }
 
 func (e *Editor) layoutGrid() {
@@ -263,10 +412,47 @@ func (e *Editor) layoutPivots() {
 	e.ui.Fill(Rect{screenX - 1, screenY - pivotMarkSize, 2, pivotMarkSize * 2}, colorPivot)
 }
 
+func (e *Editor) layoutBones() {
+	if !e.isBones {
+		return
+	}
+	twin := e.twinOf(e.partIndex)
+	for index, ends := range e.grabEnds {
+		e.layoutBoneIf(!e.isHiddenHanger(index), ends, e.boneTint(index, twin), boneWidth+2*float32(mathx.BoolToIndex(e.isHanger(index))))
+	}
+	e.layoutBoneIf(!e.isHiddenHanger(e.partIndex), e.grabEnds[e.partIndex], colorPivot, boneWidth+1)
+	e.layoutHangerHooks()
+}
+
+func (e *Editor) layoutBoneIf(isShown bool, ends [2][2]float64, tint color.Color, width float32) {
+	if !isShown {
+		return
+	}
+	e.layoutBone(ends, tint, width)
+}
+
+func (e *Editor) layoutBone(ends [2][2]float64, tint color.Color, width float32) {
+	fromX, fromY := e.toScreen(ends[0])
+	toX, toY := e.toScreen(ends[1])
+	e.ui.Line(fromX, fromY, toX, toY, width, tint)
+	e.ui.Fill(Rect{fromX - 3, fromY - 3, 6, 6}, tint)
+}
+
+func (e *Editor) toScreen(point [2]float64) (float32, float32) {
+	return e.canvasRect.X + float32(point[0])*e.zoom, e.canvasRect.Y + float32(point[1])*e.zoom
+}
+
+func pickCloser(isCloser bool, index int, distance float64, best int, bestDistance float64) (int, float64) {
+	if isCloser {
+		return index, distance
+	}
+	return best, bestDistance
+}
+
 func (e *Editor) cursorDescription() string {
 	if !e.canvasRect.Contains(e.ui.MouseX, e.ui.MouseY) {
 		return ""
 	}
 	x, y := e.mousePixel()
-	return fmt.Sprintf("  pixel %d,%d", x, y)
+	return fmt.Sprintf("  pixel %d,%d  zoom x%g", x, y, e.zoom)
 }

@@ -37,7 +37,7 @@ Les modules tournent dans l'ordre de montage ; `Enable`, `Unmount` et `Find` les
 - **Sons** : banque de sons synthétisés, ids, intervalle minimum ; ceux du framework (menus, voix, intro) sont remplaçables.
 - **Monde** : sol en matériaux qui réagissent (l'herbe brûle, laisse de la cendre, repousse ; l'eau gèle ; la propagation augmente en canicule), statuts et réactions, météo.
 - **Animation procédurale** : servo, ressorts, IK à deux os, démarche de pattes.
-- **Sprites en pixels** : fichier texte `.spr`, pièces sur un squelette, poses clés, intermédiaires calculés (rotation pixel art), images figées retouchables ; éditeur `cmd/spriteedit`.
+- **Sprites en pixels** : fichier texte `.spr`, pièces sur un squelette, poses clés, intermédiaires calculés (rotation pixel art), images figées retouchables ; éditeur `cmd/spriteedit` : image de référence à décalquer (glisser-déposer ou `-ref`), zoom à la molette pour travailler pixel par pixel ; étapes squelette, poses (cintres épaules/hanches, clichés), dessin, animation ; OUVRIR / NOUVEAU pour changer de sprite, IMPORT pour reprendre les mouvements d’un autre sprite (reciblés sur son squelette), copie de l’image de référence dans les pièces ; le jeu charge un dossier avec `sprite.LoadLibrary` et demande `hero.punch`.
 - **Écrans** : intro GREG's, menu sur démo d'attraction et classement, options, graphismes, audio, playlist, commandes (clavier, souris, manette, deux sticks), langue, pause, montée de niveau, initiales, game over.
 - **Progression** : courbe d'XP, cartes de bonus ; l'affichage est remplaçable.
 - **Bulles de dialogue** : texte qui défile sur un fond léger, avec voix, largeur et opacité réglables.

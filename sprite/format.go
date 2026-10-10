@@ -15,6 +15,7 @@ type parser struct {
 	part             *Part
 	animation        *Animation
 	frame            *Frame
+	snapshot         *Snapshot
 	parentNames      []string
 	symbols          [256]int16
 	hasCustomPalette bool
@@ -33,16 +34,19 @@ const (
 )
 
 var directives = map[string]func(p *parser, fields []string) error{
-	"sprite": (*parser).readSprite,
-	"size":   (*parser).readSize,
-	"color":  (*parser).readColor,
-	"part":   (*parser).readPart,
-	"parent": (*parser).readParent,
-	"pivot":  (*parser).readPivot,
-	"pixels": (*parser).readPixels,
-	"anim":   (*parser).readAnimation,
-	"frame":  (*parser).readFrame,
-	"pose":   (*parser).readPose,
+	"sprite":   (*parser).readSprite,
+	"size":     (*parser).readSize,
+	"color":    (*parser).readColor,
+	"part":     (*parser).readPart,
+	"parent":   (*parser).readParent,
+	"pivot":    (*parser).readPivot,
+	"tip":      (*parser).readTip,
+	"limit":    (*parser).readLimit,
+	"pixels":   (*parser).readPixels,
+	"anim":     (*parser).readAnimation,
+	"frame":    (*parser).readFrame,
+	"pose":     (*parser).readPose,
+	"snapshot": (*parser).readSnapshot,
 }
 
 var frameKinds = map[string]FrameKind{"key": FrameKey, "tween": FrameTween}
@@ -88,6 +92,9 @@ func Write(sheet *Sheet) string {
 	}
 	for _, animation := range sheet.Animations {
 		writeAnimation(&builder, sheet, animation)
+	}
+	for _, snapshot := range sheet.Snapshots {
+		writeSnapshot(&builder, sheet, snapshot)
 	}
 	return builder.String()
 }
@@ -160,8 +167,8 @@ func (p *parser) readPart(fields []string) error {
 	if p.sheet.Width == 0 {
 		return errors.New("size must come before the parts")
 	}
-	if p.animation != nil {
-		return errors.New("parts must come before the animations")
+	if p.animation != nil || p.snapshot != nil {
+		return errors.New("parts must come before the animations and snapshots")
 	}
 	p.sheet.AddPart(fields[0], NoParent, Point{p.sheet.Width / 2, p.sheet.Height / 2})
 	p.part = p.sheet.Parts[len(p.sheet.Parts)-1]
@@ -186,6 +193,32 @@ func (p *parser) readPivot(fields []string) error {
 		return err
 	}
 	p.part.Pivot = Point{values[0], values[1]}
+	p.part.Tip = p.part.Pivot
+	return nil
+}
+
+func (p *parser) readLimit(fields []string) error {
+	if p.part == nil || len(fields) != 2 {
+		return errors.New("limit belongs to a part and needs the smallest and largest angle, like: limit 0 150")
+	}
+	lowest, lowestErr := strconv.ParseFloat(fields[0], 64)
+	highest, highestErr := strconv.ParseFloat(fields[1], 64)
+	if lowestErr != nil || highestErr != nil || lowest > highest {
+		return fmt.Errorf("limit needs two angles in order, got %q", strings.Join(fields, " "))
+	}
+	p.part.Range, p.part.IsLimited = [2]float64{lowest, highest}, true
+	return nil
+}
+
+func (p *parser) readTip(fields []string) error {
+	if p.part == nil {
+		return errors.New("tip belongs to a part, after its pivot")
+	}
+	values, err := readInts(fields, 2)
+	if err != nil {
+		return err
+	}
+	p.part.Tip = Point{values[0], values[1]}
 	return nil
 }
 
@@ -248,7 +281,17 @@ func (p *parser) readAnimation(fields []string) error {
 	}
 	animation := &Animation{Name: fields[0], IsLooping: len(fields) < 2 || fields[1] != loopNames[false]}
 	p.sheet.Animations = append(p.sheet.Animations, animation)
-	p.animation, p.part, p.frame = animation, nil, nil
+	p.animation, p.part, p.frame, p.snapshot = animation, nil, nil, nil
+	return nil
+}
+
+func (p *parser) readSnapshot(fields []string) error {
+	if len(fields) != 1 {
+		return errors.New("snapshot needs a name")
+	}
+	snapshot := &Snapshot{Name: fields[0]}
+	p.sheet.Snapshots = append(p.sheet.Snapshots, snapshot)
+	p.snapshot, p.animation, p.part, p.frame = snapshot, nil, nil, nil
 	return nil
 }
 
@@ -267,8 +310,9 @@ func (p *parser) readFrame(fields []string) error {
 }
 
 func (p *parser) readPose(fields []string) error {
-	if p.frame == nil || len(fields) != 4 {
-		return errors.New("pose belongs to a frame, like: pose arm 45 0 0")
+	target := p.poseTarget()
+	if target == nil || len(fields) != 4 {
+		return errors.New("pose belongs to a frame or a snapshot, like: pose arm 45 0 0")
 	}
 	index := p.sheet.FindPart(fields[0])
 	angle, err := strconv.ParseFloat(fields[1], 64)
@@ -276,8 +320,18 @@ func (p *parser) readPose(fields []string) error {
 	if index < 0 || err != nil || shiftErr != nil {
 		return fmt.Errorf("pose needs a known part, an angle and two offsets, got %q", strings.Join(fields, " "))
 	}
-	p.frame.Pose = p.sheet.Grow(p.frame.Pose)
-	p.frame.Pose[index] = Joint{Angle: angle, Shift: Point{shift[0], shift[1]}}
+	*target = p.sheet.Grow(*target)
+	(*target)[index] = Joint{Angle: angle, Shift: Point{shift[0], shift[1]}}
+	return nil
+}
+
+func (p *parser) poseTarget() *Pose {
+	if p.frame != nil {
+		return &p.frame.Pose
+	}
+	if p.snapshot != nil {
+		return &p.snapshot.Pose
+	}
 	return nil
 }
 
@@ -344,7 +398,10 @@ func writePart(builder *strings.Builder, sheet *Sheet, part *Part) {
 	if part.Parent != NoParent {
 		parentName = sheet.Parts[part.Parent].Name
 	}
-	fmt.Fprintf(builder, "\npart %s\nparent %s\npivot %d %d\n", part.Name, parentName, part.Pivot.X, part.Pivot.Y)
+	fmt.Fprintf(builder, "\npart %s\nparent %s\npivot %d %d\ntip %d %d\n", part.Name, parentName, part.Pivot.X, part.Pivot.Y, part.Tip.X, part.Tip.Y)
+	if part.IsLimited {
+		fmt.Fprintf(builder, "limit %s %s\n", strconv.FormatFloat(part.Range[0], 'f', -1, 64), strconv.FormatFloat(part.Range[1], 'f', -1, 64))
+	}
 	writePixels(builder, sheet, part.Pixels)
 }
 
@@ -362,6 +419,13 @@ func writeFrame(builder *strings.Builder, sheet *Sheet, frame *Frame) {
 	}
 	if frame.Pixels != nil {
 		writePixels(builder, sheet, frame.Pixels)
+	}
+}
+
+func writeSnapshot(builder *strings.Builder, sheet *Sheet, snapshot *Snapshot) {
+	fmt.Fprintf(builder, "\nsnapshot %s\n", snapshot.Name)
+	for index, joint := range snapshot.Pose {
+		writeJointIf(builder, sheet, index, joint, index < len(sheet.Parts) && joint != Joint{})
 	}
 }
 

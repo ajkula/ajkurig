@@ -13,6 +13,7 @@ import (
 func main() {
 	size := flag.String("size", "48x64", "width x height of a new sprite, in pixels")
 	snapshot := flag.String("snapshot", "", "saves the editor window to this PNG after a few frames, then quits")
+	reference := flag.String("ref", "", "a picture shown under the drawing to trace over (dropping one on the window works too)")
 	flag.Parse()
 	path := flag.Arg(0)
 	if path == "" {
@@ -29,6 +30,9 @@ func main() {
 	ebiten.SetWindowTitle("ajkurig Sprite Editor")
 	sprites := editor.New(path, width, height)
 	sprites.SetSnapshot(*snapshot)
+	if *reference != "" {
+		sprites.SetReference(*reference)
+	}
 	if err := ebiten.RunGame(sprites); err != nil {
 		log.Fatal(err)
 	}

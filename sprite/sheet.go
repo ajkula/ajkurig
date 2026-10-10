@@ -3,6 +3,7 @@ package sprite
 import (
 	"math"
 	"slices"
+	"strings"
 
 	"ajkurig/mathx"
 )
@@ -27,15 +28,18 @@ type Joint struct {
 type Pose []Joint
 
 type Part struct {
-	Name     string
-	Parent   int
-	Pivot    Point
-	Pixels   []uint8
-	width    int
-	height   int
-	bounds   box
-	upscaled []uint8
-	isStale  bool
+	Name      string
+	Parent    int
+	Pivot     Point
+	Tip       Point
+	Range     [2]float64
+	IsLimited bool
+	Pixels    []uint8
+	width     int
+	height    int
+	bounds    box
+	upscaled  []uint8
+	isStale   bool
 }
 
 type FrameKind uint8
@@ -53,6 +57,11 @@ type Animation struct {
 	Frames    []Frame
 }
 
+type Snapshot struct {
+	Name string
+	Pose Pose
+}
+
 type Sheet struct {
 	Name       string
 	Width      int
@@ -60,6 +69,7 @@ type Sheet struct {
 	Palette    []Swatch
 	Parts      []*Part
 	Animations []*Animation
+	Snapshots  []*Snapshot
 	transforms []Affine
 	isResolved []bool
 }
@@ -99,6 +109,8 @@ var DefaultPalette = []Swatch{
 	{'s', [3]uint8{0xD1, 0xC5, 0xC0}},
 }
 
+var sideSwapper = strings.NewReplacer("front", "back", "back", "front", "left", "right", "right", "left")
+
 var FrameKindNames = [...]string{FrameKey: "key", FrameTween: "tween"}
 
 // ===== Public API =====
@@ -108,6 +120,16 @@ func NewSheet(name string, width, height int) *Sheet {
 	sheet.AddPart("body", NoParent, Point{width / 2, height / 2})
 	sheet.Animations = []*Animation{NewAnimation("idle")}
 	return sheet
+}
+
+func (s *Sheet) BoneEnds(transforms []Affine) [][2][2]float64 {
+	ends := make([][2][2]float64, len(s.Parts))
+	for index, part := range s.Parts {
+		pivotX, pivotY := transforms[index].Apply(PixelCenter(part.Pivot))
+		tipX, tipY := transforms[index].Apply(PixelCenter(part.Tip))
+		ends[index] = [2][2]float64{{pivotX, pivotY}, {tipX, tipY}}
+	}
+	return ends
 }
 
 func NewAnimation(name string) *Animation {
@@ -122,6 +144,7 @@ func (s *Sheet) AddPart(name string, parent int, pivot Point) int {
 func (s *Sheet) DuplicatePart(index int) int {
 	source := s.Parts[index]
 	copied := s.newPart(source.Name, source.Parent, source.Pivot)
+	copied.Tip, copied.Range, copied.IsLimited = source.Tip, source.Range, source.IsLimited
 	copy(copied.Pixels, source.Pixels)
 	s.Parts = slices.Insert(s.Parts, index+1, copied)
 	for _, part := range s.Parts {
@@ -157,6 +180,14 @@ func (s *Sheet) CanParent(child, parent int) bool {
 		return true
 	}
 	return parent != child && !s.isAncestor(child, parent)
+}
+
+func (s *Sheet) Counterpart(index int) int {
+	twin := s.FindPart(sideSwapper.Replace(s.Parts[index].Name))
+	if twin == index {
+		return -1
+	}
+	return twin
 }
 
 func (s *Sheet) FindPart(name string) int {
@@ -253,6 +284,13 @@ func (p *Part) Set(x, y int, value uint8) bool {
 	return true
 }
 
+func (p *Part) Limit(angle float64) float64 {
+	if !p.IsLimited {
+		return angle
+	}
+	return min(max(angle, p.Range[0]), p.Range[1])
+}
+
 func (p *Part) Invalidate() {
 	p.isStale = true
 }
@@ -266,6 +304,7 @@ func (p *Part) Mirror() {
 		mirrored[y*p.width+mathx.ClampInt(mirroredX, 0, p.width-1)] |= value * uint8(mathx.BoolToIndex(isInside))
 	}
 	p.Pixels = mirrored
+	p.Tip.X = 2*p.Pivot.X - p.Tip.X
 	p.isStale = true
 }
 
@@ -286,7 +325,7 @@ func FloodFill(pixels []uint8, width, height, x, y int, value uint8) {
 // ===== Internal =====
 
 func (s *Sheet) newPart(name string, parent int, pivot Point) *Part {
-	return &Part{Name: name, Parent: parent, Pivot: pivot, Pixels: make([]uint8, s.Width*s.Height), width: s.Width, height: s.Height, isStale: true}
+	return &Part{Name: name, Parent: parent, Pivot: pivot, Tip: pivot, Pixels: make([]uint8, s.Width*s.Height), width: s.Width, height: s.Height, isStale: true}
 }
 
 func (s *Sheet) eachPose(change func(pose *Pose)) {
@@ -294,6 +333,9 @@ func (s *Sheet) eachPose(change func(pose *Pose)) {
 		for index := range animation.Frames {
 			change(&animation.Frames[index].Pose)
 		}
+	}
+	for _, snapshot := range s.Snapshots {
+		change(&snapshot.Pose)
 	}
 }
 

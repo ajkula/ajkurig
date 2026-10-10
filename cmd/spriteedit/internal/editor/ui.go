@@ -1,6 +1,7 @@
 package editor
 
 import (
+	"image"
 	"image/color"
 	"strings"
 
@@ -26,28 +27,54 @@ type Rect struct {
 type commandKind uint8
 
 type command struct {
-	kind  commandKind
-	rect  Rect
-	tint  color.Color
-	text  string
-	align text.Align
-	image *ebiten.Image
-	alpha float32
+	kind     commandKind
+	rect     Rect
+	tint     color.Color
+	text     string
+	align    text.Align
+	image    *ebiten.Image
+	alpha    float32
+	isSmooth bool
+}
+
+type SimulatedMouse struct {
+	X            float32
+	Y            float32
+	WheelY       float32
+	IsDown       bool
+	IsRightDown  bool
+	IsMiddleDown bool
+	IsControl    bool
+	wasDown      bool
+	wasRight     bool
+	wasMiddle    bool
 }
 
 type UI struct {
+	Simulated       *SimulatedMouse
 	commands        []command
 	MouseX          float32
 	MouseY          float32
 	IsMouseDown     bool
 	IsRightDown     bool
+	IsMiddleDown    bool
 	IsClicked       bool
 	IsRightClicked  bool
+	IsMiddleClicked bool
+	IsControlDown   bool
+	WheelY          float32
+	IsHelping       bool
+	Placed          map[string]Rect
 	isClickConsumed bool
+	isBlocked       bool
+	blocked         [3]bool
 	focusID         string
 	focusText       string
 	characters      []rune
-	hint            string
+	hot             string
+	lastHot         string
+	hotTicks        int
+	picked          string
 	face            *text.GoTextFace
 }
 
@@ -58,6 +85,9 @@ const (
 	commandOutline
 	commandText
 	commandImage
+	commandLine
+	commandClip
+	commandUnclip
 )
 
 const (
@@ -80,6 +110,11 @@ var (
 	colorPivot      = nrgba(colorx.SteelPink, 1)
 	colorLink       = nrgba(colorx.ElectricBlue, 0.6)
 	colorGrid       = nrgba(colorx.PaleSilver, 0.07)
+	colorBone       = nrgba(colorx.ElectricBlue, 0.7)
+	colorTwin       = nrgba(colorx.Keppel, 0.85)
+	colorHanger     = nrgba(colorx.BlushingPurple, 0.95)
+	colorSelected   = nrgba(colorx.Frostbite, 0.9)
+	colorShade      = nrgba(colorx.RaisinBlack, 0.8)
 	colorCheckerA   = nrgba(colorx.Mix(colorx.RaisinBlack, colorx.PaleSilver, 0.08), 1)
 	colorCheckerB   = nrgba(colorx.Mix(colorx.RaisinBlack, colorx.PaleSilver, 0.12), 1)
 )
@@ -91,7 +126,7 @@ func NewUI() *UI {
 	if err != nil {
 		panic(err)
 	}
-	return &UI{face: &text.GoTextFace{Source: source, Size: fontSize}}
+	return &UI{face: &text.GoTextFace{Source: source, Size: fontSize}, Placed: map[string]Rect{}}
 }
 
 func (r Rect) Contains(x, y float32) bool {
@@ -99,20 +134,72 @@ func (r Rect) Contains(x, y float32) bool {
 }
 
 func (u *UI) Begin() {
-	x, y := ebiten.CursorPosition()
-	u.MouseX, u.MouseY = float32(x), float32(y)
-	u.IsMouseDown = ebiten.IsMouseButtonPressed(ebiten.MouseButtonLeft)
-	u.IsRightDown = ebiten.IsMouseButtonPressed(ebiten.MouseButtonRight)
-	u.IsClicked = inpututil.IsMouseButtonJustPressed(ebiten.MouseButtonLeft)
-	u.IsRightClicked = inpututil.IsMouseButtonJustPressed(ebiten.MouseButtonRight)
+	u.readMouse()
 	u.isClickConsumed = false
 	u.characters = ebiten.AppendInputChars(u.characters[:0])
 	u.commands = u.commands[:0]
-	u.hint = ""
+	u.hotTicks = [2]int{0, u.hotTicks + 1}[mathx.BoolToIndex(u.hot != "" && u.hot == u.lastHot)]
+	u.lastHot, u.hot = u.hot, ""
+	clear(u.Placed)
 }
 
-func (u *UI) Hint() string {
-	return u.hint
+func (u *UI) Hovered() (string, int) {
+	return u.lastHot, u.hotTicks
+}
+
+func (u *UI) Block() {
+	u.isBlocked = true
+	u.blocked = [3]bool{u.IsClicked, u.IsRightClicked, u.IsMiddleClicked}
+	u.IsClicked, u.IsRightClicked, u.IsMiddleClicked, u.WheelY = false, false, false, 0
+}
+
+func (u *UI) Unblock() {
+	if !u.isBlocked {
+		return
+	}
+	u.isBlocked = false
+	u.IsClicked, u.IsRightClicked, u.IsMiddleClicked = u.blocked[0], u.blocked[1], u.blocked[2]
+}
+
+func (u *UI) Pick(id string) {
+	u.picked, u.IsHelping, u.isClickConsumed = id, false, true
+}
+
+func (u *UI) TakePicked() string {
+	picked := u.picked
+	u.picked = ""
+	return picked
+}
+
+func (u *UI) Focus(id, value string) {
+	u.focusID, u.focusText = id, value
+}
+
+func (u *UI) Area(rect Rect, id string) bool {
+	u.Placed[id] = rect
+	isHot := !u.isBlocked && rect.Contains(u.MouseX, u.MouseY)
+	u.hotIf(id, isHot)
+	isPressed := isHot && u.IsClickFree()
+	u.isClickConsumed = u.isClickConsumed || isPressed
+	if isPressed && u.IsHelping {
+		u.Pick(id)
+		return false
+	}
+	return isPressed
+}
+
+func (u *UI) Wrap(message string, width float32) []string {
+	lines := []string{}
+	line := ""
+	for _, word := range strings.Fields(message) {
+		candidate := strings.TrimSpace(line + " " + word)
+		if line != "" && float32(text.Advance(candidate, u.face)) > width {
+			lines, line = append(lines, line), word
+			continue
+		}
+		line = candidate
+	}
+	return append(lines, line)
 }
 
 func (u *UI) IsTyping() bool {
@@ -143,24 +230,34 @@ func (u *UI) Image(rect Rect, image *ebiten.Image, alpha float32) {
 	u.commands = append(u.commands, command{kind: commandImage, rect: rect, image: image, alpha: alpha})
 }
 
-func (u *UI) Button(rect Rect, label string, isOn bool, hint string) bool {
-	isHot := rect.Contains(u.MouseX, u.MouseY)
+func (u *UI) SmoothImage(rect Rect, image *ebiten.Image, alpha float32) {
+	u.commands = append(u.commands, command{kind: commandImage, rect: rect, image: image, alpha: alpha, isSmooth: true})
+}
+
+func (u *UI) Clip(rect Rect) {
+	u.commands = append(u.commands, command{kind: commandClip, rect: rect})
+}
+
+func (u *UI) Unclip() {
+	u.commands = append(u.commands, command{kind: commandUnclip})
+}
+
+func (u *UI) Line(fromX, fromY, toX, toY, width float32, tint color.Color) {
+	u.commands = append(u.commands, command{kind: commandLine, rect: Rect{fromX, fromY, toX, toY}, tint: tint, alpha: width})
+}
+
+func (u *UI) Button(rect Rect, label string, isOn bool, id string) bool {
+	isHot := !u.isBlocked && rect.Contains(u.MouseX, u.MouseY)
 	background := [2]color.Color{[2]color.Color{colorButton, colorButtonHot}[mathx.BoolToIndex(isHot)], colorAccentDim}[mathx.BoolToIndex(isOn)]
 	u.Fill(rect, background)
 	u.Outline(rect, [2]color.Color{colorEdge, colorAccent}[mathx.BoolToIndex(isOn)])
 	u.Text(rect.X+rect.W/2, rect.Y+(rect.H-fontSize)/2-2, label, colorText, text.AlignCenter)
-	u.hintIf(hint, isHot)
-	isPressed := isHot && u.IsClickFree()
-	u.isClickConsumed = u.isClickConsumed || isPressed
-	return isPressed
+	return u.Area(rect, id)
 }
 
-func (u *UI) TextField(id string, rect Rect, value *string, hint string) bool {
-	isHot := rect.Contains(u.MouseX, u.MouseY)
-	u.hintIf(hint, isHot)
-	if isHot && u.IsClickFree() {
+func (u *UI) TextField(id string, rect Rect, value *string) bool {
+	if u.Area(rect, id) {
 		u.focusID, u.focusText = id, *value
-		u.isClickConsumed = true
 	}
 	isFocused := u.focusID == id
 	u.Fill(rect, [2]color.Color{colorButton, colorButtonHot}[mathx.BoolToIndex(isFocused)])
@@ -175,12 +272,44 @@ func (u *UI) TextField(id string, rect Rect, value *string, hint string) bool {
 
 func (u *UI) Draw(screen *ebiten.Image) {
 	screen.Fill(colorBackground)
+	target := screen
 	for index := range u.commands {
-		painters[u.commands[index].kind](screen, &u.commands[index], u.face)
+		command := &u.commands[index]
+		target = retarget(screen, target, command)
+		painters[command.kind](target, command, u.face)
 	}
 }
 
 // ===== Internal =====
+
+func (u *UI) readMouse() {
+	if u.Simulated != nil {
+		u.readSimulatedMouse()
+		return
+	}
+	x, y := ebiten.CursorPosition()
+	u.MouseX, u.MouseY = float32(x), float32(y)
+	u.IsMouseDown = ebiten.IsMouseButtonPressed(ebiten.MouseButtonLeft)
+	u.IsRightDown = ebiten.IsMouseButtonPressed(ebiten.MouseButtonRight)
+	u.IsMiddleDown = ebiten.IsMouseButtonPressed(ebiten.MouseButtonMiddle)
+	u.IsClicked = inpututil.IsMouseButtonJustPressed(ebiten.MouseButtonLeft)
+	u.IsRightClicked = inpututil.IsMouseButtonJustPressed(ebiten.MouseButtonRight)
+	u.IsMiddleClicked = inpututil.IsMouseButtonJustPressed(ebiten.MouseButtonMiddle)
+	u.IsControlDown = ebiten.IsKeyPressed(ebiten.KeyControl) || ebiten.IsKeyPressed(ebiten.KeyMeta)
+	_, wheelY := ebiten.Wheel()
+	u.WheelY = float32(wheelY)
+}
+
+func (u *UI) readSimulatedMouse() {
+	mouse := u.Simulated
+	u.MouseX, u.MouseY = mouse.X, mouse.Y
+	u.IsMouseDown, u.IsRightDown, u.IsMiddleDown = mouse.IsDown, mouse.IsRightDown, mouse.IsMiddleDown
+	u.IsClicked, u.IsRightClicked = mouse.IsDown && !mouse.wasDown, mouse.IsRightDown && !mouse.wasRight
+	u.IsMiddleClicked = mouse.IsMiddleDown && !mouse.wasMiddle
+	mouse.wasDown, mouse.wasRight, mouse.wasMiddle = mouse.IsDown, mouse.IsRightDown, mouse.IsMiddleDown
+	u.WheelY, mouse.WheelY = mouse.WheelY, 0
+	u.IsControlDown = mouse.IsControl
+}
 
 func (u *UI) editFocusedText(value *string, rect Rect) bool {
 	u.focusText += string(u.characters)
@@ -203,11 +332,11 @@ func (u *UI) editFocusedText(value *string, rect Rect) bool {
 	return isChanged
 }
 
-func (u *UI) hintIf(hint string, isHot bool) {
-	if !isHot || hint == "" {
+func (u *UI) hotIf(id string, isHot bool) {
+	if !isHot {
 		return
 	}
-	u.hint = hint
+	u.hot = id
 }
 
 var painters = [...]func(screen *ebiten.Image, command *command, face *text.GoTextFace){
@@ -215,6 +344,35 @@ var painters = [...]func(screen *ebiten.Image, command *command, face *text.GoTe
 	commandOutline: paintOutline,
 	commandText:    paintText,
 	commandImage:   paintImage,
+	commandLine:    paintLine,
+	commandClip:    paintNothing,
+	commandUnclip:  paintNothing,
+}
+
+var retargets = map[commandKind]func(screen *ebiten.Image, command *command) *ebiten.Image{
+	commandClip:   clipTo,
+	commandUnclip: func(screen *ebiten.Image, _ *command) *ebiten.Image { return screen },
+}
+
+func retarget(screen, current *ebiten.Image, command *command) *ebiten.Image {
+	change, isRetargeting := retargets[command.kind]
+	if !isRetargeting {
+		return current
+	}
+	return change(screen, command)
+}
+
+func clipTo(screen *ebiten.Image, command *command) *ebiten.Image {
+	rect := command.rect
+	bounds := image.Rect(int(rect.X), int(rect.Y), int(rect.X+rect.W), int(rect.Y+rect.H))
+	return screen.SubImage(bounds).(*ebiten.Image)
+}
+
+func paintNothing(*ebiten.Image, *command, *text.GoTextFace) {}
+
+func paintLine(screen *ebiten.Image, command *command, _ *text.GoTextFace) {
+	rect := command.rect
+	vector.StrokeLine(screen, rect.X, rect.Y, rect.W, rect.H, command.alpha, command.tint, true)
 }
 
 func paintFill(screen *ebiten.Image, command *command, _ *text.GoTextFace) {
@@ -240,6 +398,7 @@ func paintImage(screen *ebiten.Image, command *command, _ *text.GoTextFace) {
 	options.GeoM.Scale(float64(command.rect.W)/float64(bounds.Dx()), float64(command.rect.H)/float64(bounds.Dy()))
 	options.GeoM.Translate(float64(command.rect.X), float64(command.rect.Y))
 	options.ColorScale.ScaleAlpha(command.alpha)
+	options.Filter = [2]ebiten.Filter{ebiten.FilterNearest, ebiten.FilterLinear}[mathx.BoolToIndex(command.isSmooth)]
 	screen.DrawImage(command.image, options)
 }
 
