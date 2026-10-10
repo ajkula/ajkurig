@@ -590,3 +590,31 @@ func worldDirection(sheet *Sheet, pose Pose, index int) (float64, bool) {
 	rest, hasBone := sheet.RestDirection(index)
 	return rest + sheet.Transforms(pose)[index].Rotation(), hasBone
 }
+
+func TestMovesLeavingTheCanvasAreNotCut(t *testing.T) {
+	sheet, err := Parse(armSource)
+	if err != nil {
+		t.Fatal(err)
+	}
+	animation := NewAnimation("reach")
+	animation.Frames[0].Pose = Pose{{Shift: Point{X: 6}}, {}}
+	area := sheet.AnimationArea(animation)
+	if area.X+area.Width <= sheet.Width {
+		t.Fatalf("the move reaches past the canvas, its area should too: %+v", area)
+	}
+	pixels := make([]uint8, area.Width*area.Height)
+	sheet.RenderFrameIn(animation, 0, area, pixels)
+	fist := (4-area.Y)*area.Width + (12 - area.X)
+	if pixels[fist] == Transparent {
+		t.Fatal("the end of the arm outside the canvas should still be drawn")
+	}
+}
+
+func TestAnchorSitsUnderTheHipsOnTheGround(t *testing.T) {
+	sheet := NewHumanoid("hero", 64, 64)
+	x, y := sheet.Anchor()
+	hips := sheet.Parts[sheet.FindPart("hips")].Pivot
+	if x != float64(hips.X)+0.5 || y < 55 || y > 64 {
+		t.Fatalf("the anchor should be under the hips on the ground, got %v,%v", x, y)
+	}
+}

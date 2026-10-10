@@ -51,15 +51,19 @@ func renderSheet(sheet *sprite.Sheet, scale int) *image.NRGBA {
 	for _, animation := range sheet.Animations {
 		columns = max(columns, len(animation.Frames))
 	}
-	cellWidth, cellHeight := (sheet.Width+frameGap)*scale, (sheet.Height+frameGap)*scale
+	area := sheet.Canvas()
+	for _, animation := range sheet.Animations {
+		area = area.Union(sheet.AnimationArea(animation))
+	}
+	cellWidth, cellHeight := (area.Width+frameGap)*scale, (area.Height+frameGap)*scale
 	canvas := image.NewNRGBA(image.Rect(0, 0, columns*cellWidth, len(sheet.Animations)*cellHeight))
-	pixels := make([]uint8, sheet.Width*sheet.Height)
+	pixels := make([]uint8, area.Width*area.Height)
 	rgba := make([]byte, len(pixels)*4)
 	for row, animation := range sheet.Animations {
 		for column := range animation.Frames {
-			sheet.RenderFrame(animation, column, pixels)
+			sheet.RenderFrameIn(animation, column, area, pixels)
 			sheet.WriteRGBA(pixels, rgba)
-			paintFrame(canvas, rgba, sheet.Width, column*cellWidth, row*cellHeight, scale)
+			paintFrame(canvas, rgba, area.Width, column*cellWidth, row*cellHeight, scale)
 		}
 	}
 	return canvas

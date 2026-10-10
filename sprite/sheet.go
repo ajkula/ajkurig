@@ -231,11 +231,7 @@ func (s *Sheet) Render(pose Pose, target []uint8) {
 }
 
 func (s *Sheet) RenderSelection(pose Pose, isShown func(index int) bool, target []uint8) {
-	clear(target)
-	s.resolveTransforms(pose)
-	for index, part := range s.Parts {
-		s.stampIf(part, s.transforms[index], target, isShown(index))
-	}
+	s.renderSelectionIn(pose, isShown, s.Canvas(), target)
 }
 
 func (s *Sheet) RenderFrame(animation *Animation, index int, target []uint8) {
@@ -380,26 +376,34 @@ func (s *Sheet) transformOf(index int, pose Pose) Affine {
 	return s.transforms[index]
 }
 
-func (s *Sheet) stampIf(part *Part, transform Affine, target []uint8, isShown bool) {
+func (s *Sheet) renderSelectionIn(pose Pose, isShown func(index int) bool, area Area, target []uint8) {
+	clear(target)
+	s.resolveTransforms(pose)
+	for index, part := range s.Parts {
+		s.stampIf(part, s.transforms[index], area, target, isShown(index))
+	}
+}
+
+func (s *Sheet) stampIf(part *Part, transform Affine, area Area, target []uint8, isShown bool) {
 	part.refresh()
 	if !isShown || part.bounds.isEmpty() {
 		return
 	}
-	region := transformBox(part.bounds, transform).clip(s.Width, s.Height)
+	region := transformBox(part.bounds, transform).clipTo(area)
 	inverse := transform.Inverse()
 	isExact := isQuarterTurn(transform.Rotation())
 	part.prepareSampling(isExact)
 	sample := samplers[mathx.BoolToIndex(isExact)]
 	for y := region.minY; y < region.maxY; y++ {
-		s.stampRow(part, inverse, sample, y, region, target)
+		stampRow(part, inverse, sample, y, region, area, target)
 	}
 }
 
-func (s *Sheet) stampRow(part *Part, inverse Affine, sample func(*Part, float64, float64) uint8, y int, region box, target []uint8) {
-	row := target[y*s.Width : (y+1)*s.Width]
+func stampRow(part *Part, inverse Affine, sample func(*Part, float64, float64) uint8, y int, region box, area Area, target []uint8) {
+	row := target[(y-area.Y)*area.Width : (y-area.Y+1)*area.Width]
 	for x := region.minX; x < region.maxX; x++ {
 		sourceX, sourceY := inverse.Apply(float64(x)+0.5, float64(y)+0.5)
-		row[x] = overlay(row[x], sample(part, sourceX, sourceY))
+		row[x-area.X] = overlay(row[x-area.X], sample(part, sourceX, sourceY))
 	}
 }
 
@@ -574,8 +578,8 @@ func (b box) isEmpty() bool {
 	return b.minX >= b.maxX || b.minY >= b.maxY
 }
 
-func (b box) clip(width, height int) box {
-	return box{max(b.minX, 0), max(b.minY, 0), min(b.maxX, width), min(b.maxY, height)}
+func (b box) clipTo(area Area) box {
+	return box{max(b.minX, area.X), max(b.minY, area.Y), min(b.maxX, area.X+area.Width), min(b.maxY, area.Y+area.Height)}
 }
 
 func transformBox(bounds box, transform Affine) box {
