@@ -21,8 +21,10 @@ type Swatch struct {
 }
 
 type Joint struct {
-	Angle float64
-	Shift Point
+	Angle   float64
+	Shift   Point
+	Turn    float64
+	Drawing string
 }
 
 type Pose []Joint
@@ -34,7 +36,9 @@ type Part struct {
 	Tip       Point
 	Range     [2]float64
 	IsLimited bool
+	Depth     int
 	Pixels    []uint8
+	Views     []*View
 	width     int
 	height    int
 	bounds    box
@@ -63,15 +67,24 @@ type Snapshot struct {
 }
 
 type Sheet struct {
-	Name       string
-	Width      int
-	Height     int
-	Palette    []Swatch
-	Parts      []*Part
-	Animations []*Animation
-	Snapshots  []*Snapshot
-	transforms []Affine
-	isResolved []bool
+	Name         string
+	Width        int
+	Height       int
+	Palette      []Swatch
+	Parts        []*Part
+	Animations   []*Animation
+	Snapshots    []*Snapshot
+	transforms   []Affine
+	isResolved   []bool
+	orientations []orientation
+	positions    [][3]float64
+	facings      []float64
+	depths       []float64
+	ownDepths    []float64
+	layers       []*Part
+	order        []int
+	carriers     []int
+	childCounts  []int
 }
 
 type box struct {
@@ -144,8 +157,11 @@ func (s *Sheet) AddPart(name string, parent int, pivot Point) int {
 func (s *Sheet) DuplicatePart(index int) int {
 	source := s.Parts[index]
 	copied := s.newPart(source.Name, source.Parent, source.Pivot)
-	copied.Tip, copied.Range, copied.IsLimited = source.Tip, source.Range, source.IsLimited
+	copied.Tip, copied.Range, copied.IsLimited, copied.Depth = source.Tip, source.Range, source.IsLimited, source.Depth
 	copy(copied.Pixels, source.Pixels)
+	for _, view := range source.Views {
+		copied.Views = append(copied.Views, &View{Turn: view.Turn, Pixels: slices.Clone(view.Pixels)})
+	}
 	s.Parts = slices.Insert(s.Parts, index+1, copied)
 	for _, part := range s.Parts {
 		part.Parent = shiftAfterInsert(part.Parent, index+1)
@@ -264,6 +280,28 @@ func (a *Animation) Duration() int {
 	return total
 }
 
+func (a *Animation) PeakTick() int {
+	peak, longest, tick := 0, -1, 0
+	for _, frame := range a.Frames {
+		isLonger := frame.Kind == FrameKey && frame.Ticks > longest
+		peak, longest = mathx.Pick(isLonger, peak, tick), mathx.Pick(isLonger, longest, frame.Ticks)
+		tick += frame.Ticks
+	}
+	return peak
+}
+
+func (a *Animation) KeyStart(key int) int {
+	tick, seen := 0, 0
+	for _, frame := range a.Frames {
+		if frame.Kind == FrameKey && seen == key {
+			return tick
+		}
+		seen += mathx.BoolToIndex(frame.Kind == FrameKey)
+		tick += frame.Ticks
+	}
+	return tick
+}
+
 func (p *Part) At(x, y int) uint8 {
 	if !p.isInside(x, y) {
 		return Transparent
@@ -292,14 +330,8 @@ func (p *Part) Invalidate() {
 }
 
 func (p *Part) Mirror() {
-	mirrored := make([]uint8, len(p.Pixels))
-	for index, value := range p.Pixels {
-		x, y := index%p.width, index/p.width
-		mirroredX := 2*p.Pivot.X - x
-		isInside := mirroredX >= 0 && mirroredX < p.width
-		mirrored[y*p.width+mathx.ClampInt(mirroredX, 0, p.width-1)] |= value * uint8(mathx.BoolToIndex(isInside))
-	}
-	p.Pixels = mirrored
+	p.Pixels = p.mirrorPixels(p.Pixels)
+	p.eachView(func(view *View) { view.Pixels, view.Turn = p.mirrorPixels(view.Pixels), -view.Turn })
 	p.Tip.X = 2*p.Pivot.X - p.Tip.X
 	p.isStale = true
 }
@@ -319,6 +351,17 @@ func FloodFill(pixels []uint8, width, height, x, y int, value uint8) {
 }
 
 // ===== Internal =====
+
+func (p *Part) mirrorPixels(pixels []uint8) []uint8 {
+	mirrored := make([]uint8, len(pixels))
+	for index, value := range pixels {
+		x, y := index%p.width, index/p.width
+		mirroredX := 2*p.Pivot.X - x
+		isInside := mirroredX >= 0 && mirroredX < p.width
+		mirrored[y*p.width+mathx.ClampInt(mirroredX, 0, p.width-1)] |= value * uint8(mathx.BoolToIndex(isInside))
+	}
+	return mirrored
+}
 
 func (s *Sheet) newPart(name string, parent int, pivot Point) *Part {
 	return &Part{Name: name, Parent: parent, Pivot: pivot, Tip: pivot, Pixels: make([]uint8, s.Width*s.Height), width: s.Width, height: s.Height, isStale: true}
@@ -357,30 +400,32 @@ func (s *Sheet) resolveTransforms(pose Pose) {
 	count := len(s.Parts)
 	s.transforms = slices.Grow(s.transforms[:0], count)[:count]
 	s.isResolved = slices.Grow(s.isResolved[:0], count)[:count]
+	s.orientations = slices.Grow(s.orientations[:0], count)[:count]
+	s.positions = slices.Grow(s.positions[:0], count)[:count]
+	s.facings = slices.Grow(s.facings[:0], count)[:count]
+	s.depths = slices.Grow(s.depths[:0], count)[:count]
+	s.layers = slices.Grow(s.layers[:0], count)[:count]
 	clear(s.isResolved)
 	for index := range s.Parts {
-		s.transformOf(index, pose)
+		s.placeOf(index, pose)
 	}
+	s.dressParts(pose)
+	s.sortByDepth()
 }
 
-func (s *Sheet) transformOf(index int, pose Pose) Affine {
-	if index == NoParent {
-		return Identity
-	}
+func (s *Sheet) placeOf(index int, pose Pose) {
 	if s.isResolved[index] {
-		return s.transforms[index]
+		return
 	}
 	s.isResolved[index] = true
-	part := s.Parts[index]
-	s.transforms[index] = s.transformOf(part.Parent, pose).Then(jointTransform(part.Pivot, jointAt(pose, index)))
-	return s.transforms[index]
+	s.placePart(index, jointAt(pose, index), s.parentFrame(s.Parts[index].Parent, pose))
 }
 
 func (s *Sheet) renderSelectionIn(pose Pose, isShown func(index int) bool, area Area, target []uint8) {
 	clear(target)
 	s.resolveTransforms(pose)
-	for index, part := range s.Parts {
-		s.stampIf(part, s.transforms[index], area, target, isShown(index))
+	for _, index := range s.order {
+		s.stampIf(s.layers[index], s.transforms[index], area, target, isShown(index))
 	}
 }
 
@@ -504,8 +549,10 @@ func jointAt(pose Pose, index int) Joint {
 func mixJoint(from, to Joint, weight float64) Joint {
 	turn := math.Remainder(to.Angle-from.Angle, 360)
 	return Joint{
-		Angle: from.Angle + turn*weight,
-		Shift: Point{mixInt(from.Shift.X, to.Shift.X, weight), mixInt(from.Shift.Y, to.Shift.Y, weight)},
+		Angle:   from.Angle + turn*weight,
+		Shift:   Point{mixInt(from.Shift.X, to.Shift.X, weight), mixInt(from.Shift.Y, to.Shift.Y, weight)},
+		Turn:    from.Turn + math.Remainder(to.Turn-from.Turn, 360)*weight,
+		Drawing: [2]string{from.Drawing, to.Drawing}[boolToInt(weight >= 0.5)],
 	}
 }
 

@@ -37,11 +37,8 @@ func (s *Sheet) MoveTip(index int, tip Point) {
 }
 
 func (p *Part) Translate(deltaX, deltaY int) {
-	moved := make([]uint8, len(p.Pixels))
-	for index, value := range p.Pixels {
-		p.placeInto(moved, index%p.width+deltaX, index/p.width+deltaY, value)
-	}
-	p.Pixels = moved
+	p.Pixels = p.translatePixels(p.Pixels, deltaX, deltaY)
+	p.eachView(func(view *View) { view.Pixels = p.translatePixels(view.Pixels, deltaX, deltaY) })
 	p.Pivot = Point{p.Pivot.X + deltaX, p.Pivot.Y + deltaY}
 	p.Tip = Point{p.Tip.X + deltaX, p.Tip.Y + deltaY}
 	p.isStale = true
@@ -62,6 +59,14 @@ func (s *Sheet) translateIfDescendant(descendant, ancestor, deltaX, deltaY int) 
 		return
 	}
 	s.Parts[descendant].Translate(deltaX, deltaY)
+}
+
+func (p *Part) translatePixels(pixels []uint8, deltaX, deltaY int) []uint8 {
+	moved := make([]uint8, len(pixels))
+	for index, value := range pixels {
+		p.placeInto(moved, index%p.width+deltaX, index/p.width+deltaY, value)
+	}
+	return moved
 }
 
 func (p *Part) placeInto(target []uint8, x, y int, value uint8) {

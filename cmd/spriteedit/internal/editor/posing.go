@@ -90,7 +90,7 @@ func (e *Editor) currentPose() sprite.Pose {
 		return e.sheet.Grow(slices.Clone(e.workPose))
 	}
 	if e.isRestView {
-		return e.sheet.Grow(nil)
+		return e.turnedRest()
 	}
 	return e.sheet.FramePose(e.currentAnimation(), e.frameIndex)
 }
@@ -122,8 +122,10 @@ func (e *Editor) carrySelection(pose, start sprite.Pose, primaryStart, moved spr
 			continue
 		}
 		pose[index] = sprite.Joint{
-			Angle: e.limitAngle(index, start[index].Angle+moved.Angle-primaryStart.Angle),
-			Shift: sprite.Point{X: start[index].Shift.X + moved.Shift.X - primaryStart.Shift.X, Y: start[index].Shift.Y + moved.Shift.Y - primaryStart.Shift.Y},
+			Angle:   e.limitAngle(index, start[index].Angle+moved.Angle-primaryStart.Angle),
+			Shift:   sprite.Point{X: start[index].Shift.X + moved.Shift.X - primaryStart.Shift.X, Y: start[index].Shift.Y + moved.Shift.Y - primaryStart.Shift.Y},
+			Turn:    normalizeAngle(start[index].Turn + moved.Turn - primaryStart.Turn),
+			Drawing: start[index].Drawing,
 		}
 	}
 }

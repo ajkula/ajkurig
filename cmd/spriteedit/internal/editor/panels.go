@@ -70,9 +70,9 @@ var partPanels = [modeCount]func(e *Editor, y float32){
 
 var sidePanels = [modeCount][]func(e *Editor, y float32) float32{
 	ModeSkeleton: {(*Editor).layoutStartOver, (*Editor).layoutCanvasSize, (*Editor).layoutBodyPosition, (*Editor).layoutBodySize, (*Editor).layoutOrientation, (*Editor).layoutPreview},
-	ModePoses:    {(*Editor).layoutSnapshotSection, (*Editor).layoutPostureSection, (*Editor).layoutTwinSection, (*Editor).layoutPictureSection, (*Editor).layoutPreview},
-	ModeDraw:     {(*Editor).layoutPalette, (*Editor).layoutReferenceSection, (*Editor).layoutDrawDisplay, (*Editor).layoutPreview},
-	ModeAnimate:  {(*Editor).layoutPreview, (*Editor).layoutTwinSection, (*Editor).layoutAnimateDisplay, (*Editor).layoutFramePose, (*Editor).layoutSnapshotPicker, (*Editor).layoutPalette},
+	ModePoses:    {(*Editor).layoutSnapshotSection, (*Editor).layoutPostureSection, (*Editor).layoutTurnSection, (*Editor).layoutTwinSection, (*Editor).layoutPictureSection, (*Editor).layoutPreview},
+	ModeDraw:     {(*Editor).layoutPalette, (*Editor).layoutViewSection, (*Editor).layoutReferenceSection, (*Editor).layoutDrawDisplay, (*Editor).layoutPreview},
+	ModeAnimate:  {(*Editor).layoutPreview, (*Editor).layoutTurnSection, (*Editor).layoutTwinSection, (*Editor).layoutAnimateDisplay, (*Editor).layoutFramePose, (*Editor).layoutSnapshotPicker, (*Editor).layoutPalette},
 }
 
 var bottomPanels = [modeCount]func(e *Editor){

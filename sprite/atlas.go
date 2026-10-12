@@ -2,6 +2,8 @@ package sprite
 
 import (
 	"github.com/hajimehoshi/ebiten/v2"
+
+	"ajkurig/mathx"
 )
 
 // ===== Types =====
@@ -37,6 +39,15 @@ func (c *Clip) FrameAt(tick int) *ebiten.Image {
 
 func (c *Clip) Duration() int {
 	return (&Animation{Frames: c.Frames}).Duration()
+}
+
+func (c *Clip) Draw(screen *ebiten.Image, tick int, x, y, scale float64, isFacingLeft bool) {
+	direction := float64(1 - 2*mathx.BoolToIndex(isFacingLeft))
+	options := &ebiten.DrawImageOptions{}
+	options.GeoM.Translate(-c.AnchorX, -c.AnchorY)
+	options.GeoM.Scale(direction*scale, scale)
+	options.GeoM.Translate(x, y)
+	screen.DrawImage(c.FrameAt(tick), options)
 }
 
 // ===== Internal =====

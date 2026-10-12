@@ -33,7 +33,11 @@ func (s *Sheet) FlipSkeleton() {
 	s.eachJoint(func(joint *Joint) {
 		joint.Angle = -joint.Angle
 		joint.Shift.X = -joint.Shift.X
+		joint.Turn = -joint.Turn
 	})
+	for _, part := range s.Parts {
+		part.eachView(func(view *View) { view.Turn = -view.Turn })
+	}
 }
 
 func (s *Sheet) TurnSkeleton(isClockwise bool) {
@@ -79,6 +83,7 @@ func (s *Sheet) ClearPaint() {
 
 func (p *Part) Clear() {
 	clear(p.Pixels)
+	p.Views = nil
 	p.isStale = true
 }
 
@@ -102,6 +107,7 @@ func (s *Sheet) remapEverything(mapping pixelMapping) {
 
 func (p *Part) remap(mapping pixelMapping, width, height int) {
 	p.Pixels = remapPixels(p.Pixels, p.width, width, height, mapping)
+	p.eachView(func(view *View) { view.Pixels = remapPixels(view.Pixels, p.width, width, height, mapping) })
 	p.width, p.height = width, height
 	p.Pivot = mapPoint(p.Pivot, mapping)
 	p.Tip = mapPoint(p.Tip, mapping)

@@ -688,3 +688,53 @@ func TestCopyingTheReferenceIntoTheParts(t *testing.T) {
 		t.Fatal("UNDO should remove the copied pixels")
 	}
 }
+
+func TestTurnButtonsTurnTheSelectedPart(t *testing.T) {
+	editor := newTestEditor(t)
+	editor.setMode(ModePoses)
+	hips := editor.sheet.FindPart("hips")
+	editor.selectPart(hips)
+	editor.turnSelected(45)
+	editor.turnSelected(15)
+	mustUpdate(t, editor, "turning")
+	if editor.workPose[hips].Turn != 60 {
+		t.Fatalf("two turns add up, got %v", editor.workPose[hips].Turn)
+	}
+	editor.nudge(10, 0, 0)
+	if editor.workPose[hips].Turn != 60 {
+		t.Fatal("rolling a bone keeps its turn")
+	}
+	editor.straightenSelected()
+	if editor.workPose[hips].Turn != 0 {
+		t.Fatal("STRAIGHT cancels the turn")
+	}
+}
+
+func TestNewViewTakesThePaintOfThatSide(t *testing.T) {
+	editor := newTestEditor(t)
+	editor.setMode(ModeDraw)
+	torso := editor.sheet.FindPart("torso")
+	editor.selectPart(torso)
+	editor.turnDrawing(180)
+	mustUpdate(t, editor, "turning the drawing")
+	editor.addViewHere()
+	mustUpdate(t, editor, "adding a view")
+	view := editor.sheet.Parts[torso].FindView(180)
+	if view == nil {
+		t.Fatal("NEW VIEW HERE adds a view for the side shown")
+	}
+	if editor.paintLayer() == editor.currentPart() {
+		t.Fatal("the pencil paints the new view")
+	}
+	pivot := editor.currentPart().Pivot
+	x, y := editor.transforms[torso].Apply(sprite.PixelCenter(pivot))
+	editor.colorIndex = 3
+	editor.paintPixel(int(x), int(y), editor.paintValue())
+	if view.Pixels[pivot.Y*editor.sheet.Width+pivot.X] != 3 {
+		t.Fatal("painting while turned lands in the view")
+	}
+	editor.deleteViewHere()
+	if editor.sheet.Parts[torso].FindView(180) != nil {
+		t.Fatal("DELETE VIEW removes it")
+	}
+}

@@ -135,7 +135,7 @@ func newMainMenu(shell *Shell) *MenuScreen {
 	screen.DrawExtra = func(frame *rig.Frame, image *ebiten.Image) {
 		kit := app.Kit
 		kit.Text.Draw(image, shell.HighScoreLine(), ui.FaceBold, kit.Width/2, kit.Theme.TitleTop+kit.Theme.MessageGap, kit.Theme.Record, 1, text.AlignCenter)
-		kit.Hints(image, shell.Options.ControlsHint, i18n.T(app.BindingsMessage))
+		kit.Hints(image, i18n.T(shell.Options.ControlsHint), i18n.T(app.BindingsMessage))
 	}
 	return screen
 }

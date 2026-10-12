@@ -171,7 +171,7 @@ func (e *Editor) paintPixel(x, y int, value uint8) {
 		return
 	}
 	partX, partY := e.toPartSpace(x, y)
-	e.currentPart().Set(partX, partY, value)
+	e.paintLayer().Set(partX, partY, value)
 }
 
 func (e *Editor) fillAtMouse() {
@@ -181,7 +181,7 @@ func (e *Editor) fillAtMouse() {
 		return
 	}
 	partX, partY := e.toPartSpace(x, y)
-	part := e.currentPart()
+	part := e.paintLayer()
 	sprite.FloodFill(part.Pixels, e.sheet.Width, e.sheet.Height, partX, partY, e.paintValue())
 	part.Invalidate()
 }

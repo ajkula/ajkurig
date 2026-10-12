@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"ajkurig/rng"
 )
@@ -143,8 +144,10 @@ func TestGameSoundsGetTheirOwnIDs(t *testing.T) {
 func TestMusicToggleKeepsSoundEffects(t *testing.T) {
 	engine := NewSilentEngine(NewSoundBank(), NewSignalBoard())
 	engine.SetSongs(exampleSongs())
-	engine.effectsVolume, engine.musicVolume = 1, 1
+	engine.SetEffectsVolume(1)
+	engine.SetMusicVolume(1)
 	engine.SetMusicOn(false)
+	engine.applyControls()
 	if engine.IsMusicOn() {
 		t.Fatalf("music still on after toggle")
 	}
@@ -162,8 +165,10 @@ func TestMusicToggleKeepsSoundEffects(t *testing.T) {
 func TestEmptyPlaylistSilencesMusicButNotEffects(t *testing.T) {
 	engine := NewSilentEngine(NewSoundBank(), NewSignalBoard())
 	engine.SetSongs(exampleSongs())
-	engine.effectsVolume, engine.musicVolume = 1, 1
+	engine.SetEffectsVolume(1)
+	engine.SetMusicVolume(1)
 	engine.SetPlaylistEmpty(true)
+	engine.applyControls()
 	musicPeak := float32(0)
 	for range sampleRate {
 		left, right := engine.renderFrame()
@@ -186,6 +191,7 @@ func TestSignalsReachThePlayingSong(t *testing.T) {
 	action := engine.Signals().Register("action")
 	engine.Signals().Set(action, 0.8)
 	engine.PushSignals()
+	engine.applyControls()
 	if engine.tracker.Signals()[action] != 0.8 {
 		t.Fatalf("signal did not reach the tracker")
 	}
@@ -246,9 +252,10 @@ func TestExtraLayersPlayChordTonesInEverySong(t *testing.T) {
 func TestSongCrossfadeStaysClean(t *testing.T) {
 	engine := NewSilentEngine(NewSoundBank(), NewSignalBoard())
 	engine.SetSongs(exampleSongs())
-	engine.musicVolume = 1
+	engine.SetMusicVolume(1)
 	for index := range engine.SongCount() + 1 {
 		engine.SelectSong(index % engine.SongCount())
+		engine.applyControls()
 		for range songCrossfadeSeconds * sampleRate / 4 {
 			left, right := engine.renderMusic()
 			if math.IsNaN(float64(left)) || math.IsNaN(float64(right)) || abs(left) > 4 {
@@ -344,7 +351,7 @@ C-3 01 ... | A-3 02 ...
 func TestSoundsPlayRightAfterStartup(t *testing.T) {
 	engine := NewSilentEngine(NewSoundBank(), NewSignalBoard())
 	engine.Play(SoundBombWhistle, 0.35)
-	if engine.pendingCount != 1 {
+	if engine.queuedCount != 1 {
 		t.Fatalf("a sound played before its minimum interval since startup was dropped")
 	}
 }
@@ -426,4 +433,32 @@ func peakOf(buffer []byte) float32 {
 		peak = max(peak, abs(math.Float32frombits(binary.LittleEndian.Uint32(buffer[offset:]))))
 	}
 	return peak
+}
+
+func TestGameThreadNeverWaitsForTheMusic(t *testing.T) {
+	engine := NewSilentEngine(NewSoundBank(), NewSignalBoard())
+	engine.SetSongs(exampleSongs())
+	engine.SelectSong(1)
+	buffer := make([]byte, bytesPerFrame*sampleRate)
+	done := make(chan struct{})
+	go func() {
+		engine.Read(buffer)
+		close(done)
+	}()
+	worst := time.Duration(0)
+	for isReading := true; isReading; {
+		select {
+		case <-done:
+			isReading = false
+		default:
+			begin := time.Now()
+			engine.SetEffectsVolume(0.5)
+			engine.PushSignals()
+			engine.Play(SoundMenuSelect, float32(time.Now().UnixNano())/1e9)
+			worst = max(worst, time.Since(begin))
+		}
+	}
+	if worst > 40*time.Millisecond {
+		t.Fatalf("the game thread waited %v while the music rendered", worst)
+	}
 }

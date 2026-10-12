@@ -14,6 +14,10 @@ func main() {
 	size := flag.String("size", "48x64", "width x height of a new sprite, in pixels")
 	snapshot := flag.String("snapshot", "", "saves the editor window to this PNG after a few frames, then quits")
 	reference := flag.String("ref", "", "a picture shown under the drawing to trace over (dropping one on the window works too)")
+	step := flag.Int("step", 1, "step to open on: 1 skeleton, 2 poses, 3 draw, 4 animate")
+	move := flag.String("move", "", "move to open in the animate step")
+	part := flag.String("part", "", "part to select")
+	turn := flag.Float64("turn", 0, "turn of the whole body while drawing, in degrees")
 	flag.Parse()
 	path := flag.Arg(0)
 	if path == "" {
@@ -30,6 +34,7 @@ func main() {
 	ebiten.SetWindowTitle("ajkurig Sprite Editor")
 	sprites := editor.New(path, width, height)
 	sprites.SetSnapshot(*snapshot)
+	sprites.Open(editor.Opening{Step: *step, Move: *move, Part: *part, Turn: *turn})
 	if *reference != "" {
 		sprites.SetReference(*reference)
 	}

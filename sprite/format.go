@@ -23,6 +23,7 @@ type parser struct {
 	pixelTarget      []uint8
 	pixelOrigin      Point
 	pixelRow         int
+	view             *View
 }
 
 // ===== Constants =====
@@ -42,6 +43,8 @@ var directives = map[string]func(p *parser, fields []string) error{
 	"pivot":    (*parser).readPivot,
 	"tip":      (*parser).readTip,
 	"limit":    (*parser).readLimit,
+	"depth":    (*parser).readDepth,
+	"view":     (*parser).readView,
 	"pixels":   (*parser).readPixels,
 	"anim":     (*parser).readAnimation,
 	"frame":    (*parser).readFrame,
@@ -171,7 +174,7 @@ func (p *parser) readPart(fields []string) error {
 		return errors.New("parts must come before the animations and snapshots")
 	}
 	p.sheet.AddPart(fields[0], NoParent, Point{p.sheet.Width / 2, p.sheet.Height / 2})
-	p.part = p.sheet.Parts[len(p.sheet.Parts)-1]
+	p.part, p.view = p.sheet.Parts[len(p.sheet.Parts)-1], nil
 	p.parentNames = append(p.parentNames, noParentName)
 	return nil
 }
@@ -210,6 +213,32 @@ func (p *parser) readLimit(fields []string) error {
 	return nil
 }
 
+func (p *parser) readDepth(fields []string) error {
+	if p.part == nil {
+		return errors.New("depth belongs to a part")
+	}
+	values, err := readInts(fields, 1)
+	if err != nil {
+		return err
+	}
+	p.part.Depth = values[0]
+	return nil
+}
+
+func (p *parser) readView(fields []string) error {
+	if p.part == nil || len(fields) < 1 || len(fields) > 2 {
+		return errors.New("view belongs to a part and needs a turn angle, like: view 90, or a turn and a drawing name, like: view 0 side")
+	}
+	turn, err := strconv.ParseFloat(fields[0], 64)
+	name := append(fields[1:], "")[0]
+	isTaken := p.part.FindDrawing(name) != nil || (name == "" && p.part.FindView(turn) != nil)
+	if err != nil || isTaken {
+		return fmt.Errorf("view needs a new turn angle or a new drawing name, got %q", strings.Join(fields, " "))
+	}
+	p.view = p.part.AddDrawing(name, turn)
+	return nil
+}
+
 func (p *parser) readTip(fields []string) error {
 	if p.part == nil {
 		return errors.New("tip belongs to a part, after its pivot")
@@ -239,6 +268,10 @@ func (p *parser) pixelTargetFor() ([]uint8, error) {
 	if p.frame != nil {
 		p.frame.Pixels = make([]uint8, p.sheet.Width*p.sheet.Height)
 		return p.frame.Pixels, nil
+	}
+	if p.view != nil {
+		p.view.Invalidate()
+		return p.view.Pixels, nil
 	}
 	if p.part != nil {
 		p.part.isStale = true
@@ -281,7 +314,7 @@ func (p *parser) readAnimation(fields []string) error {
 	}
 	animation := &Animation{Name: fields[0], IsLooping: len(fields) < 2 || fields[1] != loopNames[false]}
 	p.sheet.Animations = append(p.sheet.Animations, animation)
-	p.animation, p.part, p.frame, p.snapshot = animation, nil, nil, nil
+	p.animation, p.part, p.frame, p.snapshot, p.view = animation, nil, nil, nil, nil
 	return nil
 }
 
@@ -291,7 +324,7 @@ func (p *parser) readSnapshot(fields []string) error {
 	}
 	snapshot := &Snapshot{Name: fields[0]}
 	p.sheet.Snapshots = append(p.sheet.Snapshots, snapshot)
-	p.snapshot, p.animation, p.part, p.frame = snapshot, nil, nil, nil
+	p.snapshot, p.animation, p.part, p.frame, p.view = snapshot, nil, nil, nil, nil
 	return nil
 }
 
@@ -311,17 +344,18 @@ func (p *parser) readFrame(fields []string) error {
 
 func (p *parser) readPose(fields []string) error {
 	target := p.poseTarget()
-	if target == nil || len(fields) != 4 {
-		return errors.New("pose belongs to a frame or a snapshot, like: pose arm 45 0 0")
+	if target == nil || len(fields) < 4 || len(fields) > 6 {
+		return errors.New("pose belongs to a frame or a snapshot, like: pose arm 45 0 0, with an optional turn and drawing after")
 	}
 	index := p.sheet.FindPart(fields[0])
 	angle, err := strconv.ParseFloat(fields[1], 64)
-	shift, shiftErr := readInts(fields[2:], 2)
-	if index < 0 || err != nil || shiftErr != nil {
-		return fmt.Errorf("pose needs a known part, an angle and two offsets, got %q", strings.Join(fields, " "))
+	shift, shiftErr := readInts(fields[2:4], 2)
+	turn, turnErr := strconv.ParseFloat(append(fields[4:], "0")[0], 64)
+	if index < 0 || err != nil || shiftErr != nil || turnErr != nil {
+		return fmt.Errorf("pose needs a known part, an angle, two offsets and an optional turn, got %q", strings.Join(fields, " "))
 	}
 	*target = p.sheet.Grow(*target)
-	(*target)[index] = Joint{Angle: angle, Shift: Point{shift[0], shift[1]}}
+	(*target)[index] = Joint{Angle: angle, Shift: Point{shift[0], shift[1]}, Turn: turn, Drawing: append(fields[min(5, len(fields)):], "")[0]}
 	return nil
 }
 
@@ -402,7 +436,14 @@ func writePart(builder *strings.Builder, sheet *Sheet, part *Part) {
 	if part.IsLimited {
 		fmt.Fprintf(builder, "limit %s %s\n", strconv.FormatFloat(part.Range[0], 'f', -1, 64), strconv.FormatFloat(part.Range[1], 'f', -1, 64))
 	}
+	if part.Depth != 0 {
+		fmt.Fprintf(builder, "depth %d\n", part.Depth)
+	}
 	writePixels(builder, sheet, part.Pixels)
+	for _, view := range part.Views {
+		fmt.Fprintf(builder, "view %s%s\n", strconv.FormatFloat(view.Turn, 'f', -1, 64), [2]string{"", " " + view.Name}[boolToInt(view.Name != "")])
+		writePixels(builder, sheet, view.Pixels)
+	}
 }
 
 func writeAnimation(builder *strings.Builder, sheet *Sheet, animation *Animation) {
@@ -434,7 +475,10 @@ func writeJointIf(builder *strings.Builder, sheet *Sheet, index int, joint Joint
 		return
 	}
 	angle := strconv.FormatFloat(joint.Angle, 'f', -1, 64)
-	fmt.Fprintf(builder, "pose %s %s %d %d\n", sheet.Parts[index].Name, angle, joint.Shift.X, joint.Shift.Y)
+	fmt.Fprintf(builder, "pose %s %s %d %d", sheet.Parts[index].Name, angle, joint.Shift.X, joint.Shift.Y)
+	builder.WriteString([2]string{"", " " + strconv.FormatFloat(joint.Turn, 'f', -1, 64)}[boolToInt(joint.Turn != 0 || joint.Drawing != "")])
+	builder.WriteString([2]string{"", " " + joint.Drawing}[boolToInt(joint.Drawing != "")])
+	builder.WriteByte('\n')
 }
 
 func writePixels(builder *strings.Builder, sheet *Sheet, pixels []uint8) {

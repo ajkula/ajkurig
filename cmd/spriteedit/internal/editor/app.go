@@ -68,6 +68,9 @@ type Editor struct {
 	drag             drag
 	pose             sprite.Pose
 	transforms       []sprite.Affine
+	layers           []*sprite.Part
+	facings          []float64
+	drawTurn         float64
 	workPose         sprite.Pose
 	selected         []bool
 	snapshotIndex    int
@@ -200,6 +203,27 @@ func New(path string, width, height int) *Editor {
 	editor.setMode(ModeSkeleton)
 	editor.restoreReference()
 	return editor
+}
+
+type Opening struct {
+	Step int
+	Move string
+	Part string
+	Turn float64
+}
+
+func (e *Editor) Open(opening Opening) {
+	e.setMode(Mode(mathx.ClampInt(opening.Step-1, 0, int(modeCount)-1)))
+	e.drawTurn = normalizeAngle(opening.Turn)
+	for index, animation := range e.sheet.Animations {
+		if animation.Name == opening.Move {
+			e.selectAnimation(index)
+			e.isRestView = false
+		}
+	}
+	if found := e.sheet.FindPart(opening.Part); found >= 0 {
+		e.selectPart(found)
+	}
 }
 
 func (e *Editor) SetSnapshot(path string) {
@@ -437,6 +461,8 @@ func (e *Editor) resolvePose() {
 	e.keepSelectionSized()
 	e.pose = e.currentPose()
 	e.transforms = e.sheet.Transforms(e.pose)
+	e.layers = e.sheet.Layers(e.pose)
+	e.facings = e.sheet.Facings(e.pose)
 	e.boneEnds = e.sheet.BoneEnds(e.transforms)
 	e.grabEnds = e.hangerEnds(e.boneEnds)
 }
@@ -476,7 +502,7 @@ func (e *Editor) nudge(angle float64, shiftX, shiftY int) {
 	start := slices.Clone(pose)
 	twin := e.twinOf(e.partIndex)
 	primary := pose[e.partIndex]
-	moved := sprite.Joint{Angle: e.limitAngle(e.partIndex, primary.Angle+angle), Shift: sprite.Point{X: primary.Shift.X + shiftX, Y: primary.Shift.Y + shiftY}}
+	moved := sprite.Joint{Angle: e.limitAngle(e.partIndex, primary.Angle+angle), Shift: sprite.Point{X: primary.Shift.X + shiftX, Y: primary.Shift.Y + shiftY}, Turn: primary.Turn, Drawing: primary.Drawing}
 	pose[e.partIndex] = moved
 	e.applyLink(pose, twin, jointAtOrZero(start, twin), primary, moved)
 	e.carrySelection(pose, start, primary, moved)
@@ -497,8 +523,10 @@ func (e *Editor) applyLink(pose sprite.Pose, twin int, twinStart, start, moved s
 	direction := [2]float64{1, -1}[mathx.BoolToIndex(isSwinging)]
 	shares := mathx.BoolToIndex(e.link == LinkSame)
 	pose[twin] = sprite.Joint{
-		Angle: e.limitAngle(twin, twinStart.Angle+(moved.Angle-start.Angle)*direction),
-		Shift: sprite.Point{X: twinStart.Shift.X + (moved.Shift.X-start.Shift.X)*shares, Y: twinStart.Shift.Y + (moved.Shift.Y-start.Shift.Y)*shares},
+		Angle:   e.limitAngle(twin, twinStart.Angle+(moved.Angle-start.Angle)*direction),
+		Shift:   sprite.Point{X: twinStart.Shift.X + (moved.Shift.X-start.Shift.X)*shares, Y: twinStart.Shift.Y + (moved.Shift.Y-start.Shift.Y)*shares},
+		Turn:    twinStart.Turn,
+		Drawing: twinStart.Drawing,
 	}
 }
 

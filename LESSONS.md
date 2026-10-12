@@ -33,6 +33,7 @@ What Hordefall and ajkurig taught, so the next game does not fail the same way.
 
 - One persistent pool of voices, notes only restart envelopes; no allocation in the audio callback.
 - Contain levels at the source (voice volumes, layer gains), then a soft clip at the end; test peak and RMS of rendered audio, never by ear first.
+- The game thread never waits for the audio thread: it only drops settings, sounds and signals into a short lock, and the audio callback copies them at the start of each buffer and renders without holding the lock. Holding the lock while rendering made every tick wait up to a whole buffer and froze the game during song crossfades.
 - Adaptive layers: every channel always plays in time, only its gain follows the signal, so layers enter on the beat.
 - Play sounds only through ids with a minimum interval, so a horde dying at once does not stack hundreds of pops.
 

@@ -20,9 +20,9 @@ func (s *Sheet) Canvas() Area {
 func (s *Sheet) PoseArea(pose Pose) Area {
 	s.resolveTransforms(pose)
 	bounds := box{minX: s.Width, minY: s.Height}
-	for index, part := range s.Parts {
-		part.refresh()
-		bounds = bounds.unionIf(transformBox(part.bounds, s.transforms[index]), !part.bounds.isEmpty())
+	for index, layer := range s.layers {
+		layer.refresh()
+		bounds = bounds.unionIf(transformBox(layer.bounds, s.transforms[index]), !layer.bounds.isEmpty())
 	}
 	return bounds.area()
 }

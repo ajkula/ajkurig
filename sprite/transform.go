@@ -43,16 +43,6 @@ func PixelCenter(point Point) (float64, float64) {
 
 // ===== Internal =====
 
-func jointTransform(pivot Point, joint Joint) Affine {
-	sine, cosine := math.Sincos(joint.Angle * math.Pi / 180)
-	centerX, centerY := PixelCenter(pivot)
-	return Affine{
-		cosine, sine, -sine, cosine,
-		centerX + float64(joint.Shift.X) - cosine*centerX + sine*centerY,
-		centerY + float64(joint.Shift.Y) - sine*centerX - cosine*centerY,
-	}
-}
-
 func upscale(pixels []uint8, width, height int) []uint8 {
 	for range upscaleShift {
 		pixels = scale2x(pixels, width, height)

@@ -187,6 +187,19 @@ func TestFrameAtFollowsDurationsAndLooping(t *testing.T) {
 	}
 }
 
+func TestPeakAndKeyStartFollowKeyFrames(t *testing.T) {
+	animation := &Animation{Frames: []Frame{{Kind: FrameKey, Ticks: 2}, {Kind: FrameTween, Ticks: 9}, {Kind: FrameKey, Ticks: 6}, {Kind: FrameKey, Ticks: 3}}}
+	if animation.PeakTick() != 11 {
+		t.Fatalf("the peak is the longest key, got tick %d", animation.PeakTick())
+	}
+	expected := []int{0, 11, 17, 20}
+	for key, tick := range expected {
+		if got := animation.KeyStart(key); got != tick {
+			t.Fatalf("key %d: expected tick %d, got %d", key, tick, got)
+		}
+	}
+}
+
 func TestMirrorFlipsAroundThePivot(t *testing.T) {
 	sheet := mustParse(t, armSource)
 	arm := sheet.Parts[1]

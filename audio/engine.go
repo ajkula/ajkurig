@@ -18,6 +18,15 @@ type Engine struct {
 	context         *audio.Context
 	player          *audio.Player
 	mutex           sync.Mutex
+	wanted          engineSettings
+	queued          [maximumPendingSounds]SoundID
+	queuedCount     int
+	signals         [MaximumSignals]float32
+	hasSignals      bool
+	incoming        *Tracker
+	isCrossfading   bool
+	audibleLayers   int
+	description     string
 	sounds          []SoundDefinition
 	effectVoices    [effectVoiceCount]Voice
 	nextVoice       int
@@ -38,6 +47,13 @@ type Engine struct {
 	isPlaylistEmpty bool
 }
 
+type engineSettings struct {
+	musicVolume     float32
+	effectsVolume   float32
+	isMusicMuted    bool
+	isPlaylistEmpty bool
+}
+
 // ===== Constants =====
 
 const (
@@ -52,6 +68,7 @@ const (
 	audibleLayerGain     = 0.5
 	defaultMusicVolume   = 0.5
 	defaultEffectsVolume = 0.8
+	noMusicDescription   = "no music"
 )
 
 // ===== Public API =====
@@ -71,17 +88,18 @@ func NewEngine(bank *SoundBank, board *SignalBoard) *Engine {
 
 func NewSilentEngine(bank *SoundBank, board *SignalBoard) *Engine {
 	engine := &Engine{
-		random:        rng.New(0x50D),
-		sounds:        append([]SoundDefinition(nil), bank.definitions...),
-		board:         board,
-		musicVolume:   defaultMusicVolume,
-		effectsVolume: defaultEffectsVolume,
-		crossfade:     1,
+		random:      rng.New(0x50D),
+		sounds:      append([]SoundDefinition(nil), bank.definitions...),
+		board:       board,
+		wanted:      engineSettings{musicVolume: defaultMusicVolume, effectsVolume: defaultEffectsVolume},
+		crossfade:   1,
+		description: noMusicDescription,
 	}
 	engine.lastPlayed = make([]float32, len(engine.sounds))
 	for index := range engine.lastPlayed {
 		engine.lastPlayed[index] = neverPlayedSeconds
 	}
+	engine.applyControls()
 	return engine
 }
 
@@ -89,16 +107,14 @@ func (e *Engine) SetSongs(songs []*Song) {
 	if e == nil {
 		return
 	}
-	e.mutex.Lock()
-	defer e.mutex.Unlock()
-	e.songs = songs
-	e.songIndex = 0
-	e.fadingTracker, e.tracker = nil, nil
+	e.songs, e.songIndex = songs, 0
 	if len(songs) == 0 {
 		return
 	}
-	e.tracker = NewTracker(songs[0], e.board)
-	e.crossfade = 1
+	tracker := NewTracker(songs[0], e.board)
+	e.mutex.Lock()
+	defer e.mutex.Unlock()
+	e.incoming, e.isCrossfading = tracker, false
 }
 
 func (e *Engine) Play(id SoundID, nowSeconds float32) {
@@ -108,8 +124,8 @@ func (e *Engine) Play(id SoundID, nowSeconds float32) {
 	e.lastPlayed[id] = nowSeconds
 	e.mutex.Lock()
 	defer e.mutex.Unlock()
-	e.pending[e.pendingCount] = id
-	e.pendingCount = min(e.pendingCount+1, maximumPendingSounds-1)
+	e.queued[e.queuedCount] = id
+	e.queuedCount = min(e.queuedCount+1, maximumPendingSounds-1)
 }
 
 func (e *Engine) Signals() *SignalBoard {
@@ -120,11 +136,10 @@ func (e *Engine) PushSignals() {
 	if e == nil {
 		return
 	}
+	values := e.board.Values()
 	e.mutex.Lock()
 	defer e.mutex.Unlock()
-	values := e.board.Values()
-	e.signalTracker(e.tracker, values)
-	e.signalTracker(e.fadingTracker, values)
+	e.signals, e.hasSignals = values, true
 }
 
 func (e *Engine) SongCount() int {
@@ -149,53 +164,41 @@ func (e *Engine) SongTitle(index int) string {
 }
 
 func (e *Engine) AudibleLayerCount() int {
-	if e == nil || e.tracker == nil {
+	if e == nil {
 		return 0
 	}
 	e.mutex.Lock()
 	defer e.mutex.Unlock()
-	return e.tracker.AudibleChannelCount(audibleLayerGain)
+	return e.audibleLayers
 }
 
 func (e *Engine) PlayingDescription() string {
-	if e == nil || e.tracker == nil {
-		return "no music"
+	if e == nil {
+		return noMusicDescription
 	}
 	e.mutex.Lock()
 	defer e.mutex.Unlock()
-	song := e.tracker.song
-	return fmt.Sprintf("%s (tempo %d, speed %d)", song.Title, song.Tempo, song.Speed)
+	return e.description
 }
 
 func (e *Engine) SelectSong(index int) bool {
 	if e == nil || index == e.songIndex || index < 0 || index >= len(e.songs) {
 		return false
 	}
+	tracker := NewTracker(e.songs[index], e.board)
+	e.songIndex = index
 	e.mutex.Lock()
 	defer e.mutex.Unlock()
-	e.fadingTracker = e.tracker
-	e.tracker = NewTracker(e.songs[index], e.board)
-	e.crossfade = 0
-	e.songIndex = index
+	e.incoming, e.isCrossfading = tracker, true
 	return true
 }
 
 func (e *Engine) SetEffectsVolume(volume float32) {
-	if e == nil {
-		return
-	}
-	e.mutex.Lock()
-	defer e.mutex.Unlock()
-	e.effectsVolume = volume
+	e.changeSettings(func(wanted *engineSettings) { wanted.effectsVolume = volume })
 }
 
 func (e *Engine) SetMusicVolume(volume float32) {
-	if e == nil {
-		return
-	}
-	e.mutex.Lock()
-	defer e.mutex.Unlock()
-	e.musicVolume = volume
+	e.changeSettings(func(wanted *engineSettings) { wanted.musicVolume = volume })
 }
 
 func (e *Engine) IsMusicOn() bool {
@@ -204,41 +207,76 @@ func (e *Engine) IsMusicOn() bool {
 	}
 	e.mutex.Lock()
 	defer e.mutex.Unlock()
-	return !e.isMusicMuted
+	return !e.wanted.isMusicMuted
 }
 
 func (e *Engine) SetMusicOn(isOn bool) {
-	if e == nil {
-		return
-	}
-	e.mutex.Lock()
-	defer e.mutex.Unlock()
-	e.isMusicMuted = !isOn
+	e.changeSettings(func(wanted *engineSettings) { wanted.isMusicMuted = !isOn })
 }
 
 func (e *Engine) SetPlaylistEmpty(isEmpty bool) {
-	if e == nil {
-		return
-	}
-	e.mutex.Lock()
-	defer e.mutex.Unlock()
-	e.isPlaylistEmpty = isEmpty
+	e.changeSettings(func(wanted *engineSettings) { wanted.isPlaylistEmpty = isEmpty })
 }
 
 func (e *Engine) Read(buffer []byte) (int, error) {
-	e.mutex.Lock()
-	defer e.mutex.Unlock()
-	e.startPendingSounds()
+	e.applyControls()
 	frameCount := len(buffer) / bytesPerFrame
 	for frame := range frameCount {
 		left, right := e.renderFrame()
 		binary.LittleEndian.PutUint32(buffer[frame*bytesPerFrame:], math.Float32bits(left))
 		binary.LittleEndian.PutUint32(buffer[frame*bytesPerFrame+4:], math.Float32bits(right))
 	}
+	e.publishState()
 	return frameCount * bytesPerFrame, nil
 }
 
 // ===== Internal =====
+
+func (e *Engine) changeSettings(change func(wanted *engineSettings)) {
+	if e == nil {
+		return
+	}
+	e.mutex.Lock()
+	defer e.mutex.Unlock()
+	change(&e.wanted)
+}
+
+func (e *Engine) applyControls() {
+	e.mutex.Lock()
+	wanted, incoming, isCrossfading := e.wanted, e.incoming, e.isCrossfading
+	signals, hasSignals := e.signals, e.hasSignals
+	e.pendingCount = copy(e.pending[:], e.queued[:e.queuedCount])
+	e.incoming, e.hasSignals, e.queuedCount = nil, false, 0
+	e.mutex.Unlock()
+	e.musicVolume, e.effectsVolume, e.isMusicMuted, e.isPlaylistEmpty = wanted.musicVolume, wanted.effectsVolume, wanted.isMusicMuted, wanted.isPlaylistEmpty
+	e.installTracker(incoming, isCrossfading)
+	e.startPendingSounds()
+	if !hasSignals {
+		return
+	}
+	e.signalTracker(e.tracker, signals)
+	e.signalTracker(e.fadingTracker, signals)
+}
+
+func (e *Engine) installTracker(incoming *Tracker, isCrossfading bool) {
+	if incoming == nil {
+		return
+	}
+	e.fadingTracker = [2]*Tracker{nil, e.tracker}[boolToIndex(isCrossfading)]
+	e.tracker = incoming
+	e.crossfade = [2]float32{1, 0}[boolToIndex(isCrossfading)]
+}
+
+func (e *Engine) publishState() {
+	layers, description := 0, noMusicDescription
+	if e.tracker != nil {
+		song := e.tracker.song
+		layers, description = e.tracker.AudibleChannelCount(audibleLayerGain), fmt.Sprintf("%s (tempo %d, speed %d)", song.Title, song.Tempo, song.Speed)
+	}
+	e.mutex.Lock()
+	defer e.mutex.Unlock()
+	e.audibleLayers, e.description = layers, description
+}
 
 func (e *Engine) signalTracker(tracker *Tracker, values [MaximumSignals]float32) {
 	if tracker == nil {
