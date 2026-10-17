@@ -7,8 +7,8 @@ import (
 	"github.com/hajimehoshi/ebiten/v2"
 	"github.com/hajimehoshi/ebiten/v2/vector"
 
-	"ajkurig/colorx"
-	"ajkurig/mathx"
+	"github.com/ajkula/ajkurig/colorx"
+	"github.com/ajkula/ajkurig/mathx"
 )
 
 // ===== Types =====

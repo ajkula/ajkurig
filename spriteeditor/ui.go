@@ -11,8 +11,8 @@ import (
 	"github.com/hajimehoshi/ebiten/v2/vector"
 	"golang.org/x/image/font/gofont/gomono"
 
-	"ajkurig/colorx"
-	"ajkurig/mathx"
+	"github.com/ajkula/ajkurig/colorx"
+	"github.com/ajkula/ajkurig/mathx"
 )
 
 // ===== Types =====

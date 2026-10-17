@@ -1,6 +1,6 @@
 package main
 
-import "ajkurig/audio"
+import "github.com/ajkula/ajkurig/audio"
 
 // ===== Types =====
 

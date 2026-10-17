@@ -4,8 +4,8 @@ import (
 	"math"
 	"slices"
 
-	"ajkurig/mathx"
-	"ajkurig/sprite"
+	"github.com/ajkula/ajkurig/mathx"
+	"github.com/ajkula/ajkurig/sprite"
 )
 
 // ===== Types =====

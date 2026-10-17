@@ -6,10 +6,10 @@ import (
 	"github.com/hajimehoshi/ebiten/v2"
 	"github.com/hajimehoshi/ebiten/v2/text/v2"
 
-	"ajkurig/colorx"
-	"ajkurig/draw"
-	"ajkurig/input"
-	"ajkurig/mathx"
+	"github.com/ajkula/ajkurig/colorx"
+	"github.com/ajkula/ajkurig/draw"
+	"github.com/ajkula/ajkurig/input"
+	"github.com/ajkula/ajkurig/mathx"
 )
 
 // ===== Types =====

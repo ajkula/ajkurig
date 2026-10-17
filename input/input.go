@@ -9,7 +9,7 @@ import (
 	"github.com/hajimehoshi/ebiten/v2"
 	"github.com/hajimehoshi/ebiten/v2/inpututil"
 
-	"ajkurig/mathx"
+	"github.com/ajkula/ajkurig/mathx"
 )
 
 // ===== Types =====

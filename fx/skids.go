@@ -1,8 +1,8 @@
 package fx
 
 import (
-	"ajkurig/draw"
-	"ajkurig/mathx"
+	"github.com/ajkula/ajkurig/draw"
+	"github.com/ajkula/ajkurig/mathx"
 )
 
 // ===== Types =====

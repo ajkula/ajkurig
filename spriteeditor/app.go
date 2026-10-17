@@ -17,8 +17,8 @@ import (
 	"github.com/hajimehoshi/ebiten/v2"
 	"github.com/hajimehoshi/ebiten/v2/inpututil"
 
-	"ajkurig/mathx"
-	"ajkurig/sprite"
+	"github.com/ajkula/ajkurig/mathx"
+	"github.com/ajkula/ajkurig/sprite"
 )
 
 // ===== Types =====

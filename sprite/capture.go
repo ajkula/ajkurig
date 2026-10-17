@@ -5,7 +5,7 @@ import (
 	"math"
 	"strings"
 
-	"ajkurig/mathx"
+	"github.com/ajkula/ajkurig/mathx"
 )
 
 // ===== Types =====

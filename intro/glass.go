@@ -3,10 +3,10 @@ package intro
 import (
 	"github.com/hajimehoshi/ebiten/v2"
 
-	"ajkurig/colorx"
-	"ajkurig/draw"
-	"ajkurig/mathx"
-	"ajkurig/rng"
+	"github.com/ajkula/ajkurig/colorx"
+	"github.com/ajkula/ajkurig/draw"
+	"github.com/ajkula/ajkurig/mathx"
+	"github.com/ajkula/ajkurig/rng"
 )
 
 // ===== Types =====

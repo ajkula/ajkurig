@@ -11,8 +11,8 @@ import (
 	ebitenaudio "github.com/hajimehoshi/ebiten/v2/audio"
 	"github.com/hajimehoshi/ebiten/v2/inpututil"
 
-	"ajkurig/audio"
-	"ajkurig/cmd/tracker/internal/song"
+	"github.com/ajkula/ajkurig/audio"
+	"github.com/ajkula/ajkurig/cmd/tracker/internal/song"
 )
 
 // ===== Types =====

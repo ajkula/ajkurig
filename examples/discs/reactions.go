@@ -1,12 +1,12 @@
 package main
 
 import (
-	"ajkurig/audio"
-	"ajkurig/colorx"
-	"ajkurig/i18n"
-	"ajkurig/mathx"
-	"ajkurig/rig"
-	"ajkurig/world"
+	"github.com/ajkula/ajkurig/audio"
+	"github.com/ajkula/ajkurig/colorx"
+	"github.com/ajkula/ajkurig/i18n"
+	"github.com/ajkula/ajkurig/mathx"
+	"github.com/ajkula/ajkurig/rig"
+	"github.com/ajkula/ajkurig/world"
 )
 
 // ===== Types =====

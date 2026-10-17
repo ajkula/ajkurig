@@ -3,7 +3,7 @@ package sprite
 import (
 	"github.com/hajimehoshi/ebiten/v2"
 
-	"ajkurig/mathx"
+	"github.com/ajkula/ajkurig/mathx"
 )
 
 // ===== Types =====

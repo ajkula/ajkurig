@@ -8,15 +8,15 @@ import (
 
 	"github.com/hajimehoshi/ebiten/v2"
 
-	"ajkurig/audio"
-	"ajkurig/draw"
-	"ajkurig/i18n"
-	"ajkurig/input"
-	"ajkurig/mathx"
-	"ajkurig/postfx"
-	"ajkurig/scores"
-	"ajkurig/store"
-	"ajkurig/ui"
+	"github.com/ajkula/ajkurig/audio"
+	"github.com/ajkula/ajkurig/draw"
+	"github.com/ajkula/ajkurig/i18n"
+	"github.com/ajkula/ajkurig/input"
+	"github.com/ajkula/ajkurig/mathx"
+	"github.com/ajkula/ajkurig/postfx"
+	"github.com/ajkula/ajkurig/scores"
+	"github.com/ajkula/ajkurig/store"
+	"github.com/ajkula/ajkurig/ui"
 )
 
 // ===== Types =====

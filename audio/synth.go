@@ -3,7 +3,7 @@ package audio
 import (
 	"math"
 
-	"ajkurig/rng"
+	"github.com/ajkula/ajkurig/rng"
 )
 
 // ===== Types =====

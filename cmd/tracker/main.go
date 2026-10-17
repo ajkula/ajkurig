@@ -6,7 +6,7 @@ import (
 
 	"github.com/hajimehoshi/ebiten/v2"
 
-	"ajkurig/cmd/tracker/internal/editor"
+	"github.com/ajkula/ajkurig/cmd/tracker/internal/editor"
 )
 
 func main() {

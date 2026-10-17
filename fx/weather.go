@@ -3,10 +3,10 @@ package fx
 import (
 	"github.com/hajimehoshi/ebiten/v2"
 
-	"ajkurig/draw"
-	"ajkurig/mathx"
-	"ajkurig/rng"
-	"ajkurig/world"
+	"github.com/ajkula/ajkurig/draw"
+	"github.com/ajkula/ajkurig/mathx"
+	"github.com/ajkula/ajkurig/rng"
+	"github.com/ajkula/ajkurig/world"
 )
 
 // ===== Constants =====

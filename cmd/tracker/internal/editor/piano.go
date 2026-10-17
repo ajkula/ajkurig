@@ -5,7 +5,7 @@ import (
 
 	"github.com/hajimehoshi/ebiten/v2/text/v2"
 
-	"ajkurig/cmd/tracker/internal/song"
+	"github.com/ajkula/ajkurig/cmd/tracker/internal/song"
 )
 
 // ===== Constants =====

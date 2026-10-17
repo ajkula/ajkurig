@@ -13,7 +13,7 @@ import (
 
 	"github.com/hajimehoshi/ebiten/v2"
 
-	"ajkurig/sprite"
+	"github.com/ajkula/ajkurig/sprite"
 )
 
 // ===== Helpers =====

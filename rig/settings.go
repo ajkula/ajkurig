@@ -3,10 +3,10 @@ package rig
 import (
 	"github.com/hajimehoshi/ebiten/v2"
 
-	"ajkurig/i18n"
-	"ajkurig/mathx"
-	"ajkurig/scores"
-	"ajkurig/store"
+	"github.com/ajkula/ajkurig/i18n"
+	"github.com/ajkula/ajkurig/mathx"
+	"github.com/ajkula/ajkurig/scores"
+	"github.com/ajkula/ajkurig/store"
 )
 
 // ===== Types =====

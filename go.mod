@@ -1,4 +1,4 @@
-module ajkurig
+module github.com/ajkula/ajkurig
 
 go 1.26.0
 

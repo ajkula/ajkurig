@@ -9,9 +9,9 @@ import (
 	"golang.org/x/image/font/opentype"
 	"golang.org/x/image/math/fixed"
 
-	"ajkurig/colorx"
-	"ajkurig/draw"
-	"ajkurig/mathx"
+	"github.com/ajkula/ajkurig/colorx"
+	"github.com/ajkula/ajkurig/draw"
+	"github.com/ajkula/ajkurig/mathx"
 )
 
 // ===== Types =====

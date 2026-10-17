@@ -5,9 +5,9 @@ import (
 	"math"
 	"testing"
 
-	"ajkurig/audio"
-	"ajkurig/rig"
-	"ajkurig/shell"
+	"github.com/ajkula/ajkurig/audio"
+	"github.com/ajkula/ajkurig/rig"
+	"github.com/ajkula/ajkurig/shell"
 )
 
 // ===== Public API =====

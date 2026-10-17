@@ -10,7 +10,7 @@ import (
 	"testing"
 	"time"
 
-	"ajkurig/rng"
+	"github.com/ajkula/ajkurig/rng"
 )
 
 // ===== Constants =====

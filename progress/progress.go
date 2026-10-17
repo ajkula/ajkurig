@@ -1,8 +1,8 @@
 package progress
 
 import (
-	"ajkurig/mathx"
-	"ajkurig/rng"
+	"github.com/ajkula/ajkurig/mathx"
+	"github.com/ajkula/ajkurig/rng"
 )
 
 // ===== Types =====

@@ -1,6 +1,6 @@
 package ui
 
-import "ajkurig/colorx"
+import "github.com/ajkula/ajkurig/colorx"
 
 // ===== Types =====
 

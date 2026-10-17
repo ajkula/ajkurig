@@ -3,7 +3,7 @@ package progress
 import (
 	"testing"
 
-	"ajkurig/rng"
+	"github.com/ajkula/ajkurig/rng"
 )
 
 // ===== Public API =====

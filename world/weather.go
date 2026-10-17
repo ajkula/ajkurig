@@ -1,10 +1,10 @@
 package world
 
 import (
-	"ajkurig/audio"
-	"ajkurig/colorx"
-	"ajkurig/mathx"
-	"ajkurig/rng"
+	"github.com/ajkula/ajkurig/audio"
+	"github.com/ajkula/ajkurig/colorx"
+	"github.com/ajkula/ajkurig/mathx"
+	"github.com/ajkula/ajkurig/rng"
 )
 
 // ===== Types =====

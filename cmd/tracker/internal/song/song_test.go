@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	"ajkurig/audio"
+	"github.com/ajkula/ajkurig/audio"
 )
 
 func TestTemplateRoundTripPlaysTheSameNotes(t *testing.T) {

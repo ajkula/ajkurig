@@ -7,10 +7,10 @@ import (
 
 	"github.com/hajimehoshi/ebiten/v2"
 
-	"ajkurig/audio"
-	"ajkurig/input"
-	"ajkurig/rig"
-	"ajkurig/shell"
+	"github.com/ajkula/ajkurig/audio"
+	"github.com/ajkula/ajkurig/input"
+	"github.com/ajkula/ajkurig/rig"
+	"github.com/ajkula/ajkurig/shell"
 )
 
 // ===== Constants =====

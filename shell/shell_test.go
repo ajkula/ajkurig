@@ -4,9 +4,9 @@ import (
 	"path/filepath"
 	"testing"
 
-	"ajkurig/input"
-	"ajkurig/rig"
-	"ajkurig/ui"
+	"github.com/ajkula/ajkurig/input"
+	"github.com/ajkula/ajkurig/rig"
+	"github.com/ajkula/ajkurig/ui"
 )
 
 // ===== Types =====

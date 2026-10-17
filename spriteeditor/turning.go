@@ -8,8 +8,8 @@ import (
 
 	"github.com/hajimehoshi/ebiten/v2/text/v2"
 
-	"ajkurig/mathx"
-	"ajkurig/sprite"
+	"github.com/ajkula/ajkurig/mathx"
+	"github.com/ajkula/ajkurig/sprite"
 )
 
 // ===== Types =====

@@ -17,7 +17,7 @@ import (
 	"golang.org/x/image/draw"
 	_ "golang.org/x/image/webp"
 
-	"ajkurig/sprite"
+	"github.com/ajkula/ajkurig/sprite"
 )
 
 // ===== Types =====

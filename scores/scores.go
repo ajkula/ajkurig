@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"slices"
 
-	"ajkurig/mathx"
-	"ajkurig/store"
+	"github.com/ajkula/ajkurig/mathx"
+	"github.com/ajkula/ajkurig/store"
 )
 
 // ===== Types =====

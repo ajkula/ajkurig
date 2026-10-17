@@ -12,10 +12,10 @@ import (
 	"golang.org/x/image/font/gofont/gomonobold"
 	"golang.org/x/image/font/gofont/goregular"
 
-	"ajkurig/colorx"
-	"ajkurig/draw"
-	"ajkurig/i18n"
-	"ajkurig/mathx"
+	"github.com/ajkula/ajkurig/colorx"
+	"github.com/ajkula/ajkurig/draw"
+	"github.com/ajkula/ajkurig/i18n"
+	"github.com/ajkula/ajkurig/mathx"
 )
 
 // ===== Types =====

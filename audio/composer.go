@@ -1,6 +1,6 @@
 package audio
 
-import "ajkurig/rng"
+import "github.com/ajkula/ajkurig/rng"
 
 // ===== Types =====
 

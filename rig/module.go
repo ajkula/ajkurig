@@ -3,7 +3,7 @@ package rig
 import (
 	"github.com/hajimehoshi/ebiten/v2"
 
-	"ajkurig/input"
+	"github.com/ajkula/ajkurig/input"
 )
 
 // ===== Types =====

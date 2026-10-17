@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"strings"
 
-	"ajkurig/sprite"
+	"github.com/ajkula/ajkurig/sprite"
 )
 
 // ===== Constants =====

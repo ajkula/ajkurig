@@ -3,7 +3,7 @@ package colorx
 import (
 	"image/color"
 
-	"ajkurig/mathx"
+	"github.com/ajkula/ajkurig/mathx"
 )
 
 // ===== Types =====

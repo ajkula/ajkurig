@@ -3,8 +3,8 @@ package draw
 import (
 	"github.com/hajimehoshi/ebiten/v2"
 
-	"ajkurig/colorx"
-	"ajkurig/mathx"
+	"github.com/ajkula/ajkurig/colorx"
+	"github.com/ajkula/ajkurig/mathx"
 )
 
 // ===== Types =====

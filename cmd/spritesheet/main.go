@@ -7,7 +7,7 @@ import (
 	"log"
 	"os"
 
-	"ajkurig/sprite"
+	"github.com/ajkula/ajkurig/sprite"
 )
 
 // ===== Constants =====

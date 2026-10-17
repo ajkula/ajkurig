@@ -4,11 +4,11 @@ import (
 	"github.com/hajimehoshi/ebiten/v2"
 	"github.com/hajimehoshi/ebiten/v2/text/v2"
 
-	"ajkurig/colorx"
-	"ajkurig/draw"
-	"ajkurig/mathx"
-	"ajkurig/rng"
-	"ajkurig/ui"
+	"github.com/ajkula/ajkurig/colorx"
+	"github.com/ajkula/ajkurig/draw"
+	"github.com/ajkula/ajkurig/mathx"
+	"github.com/ajkula/ajkurig/rng"
+	"github.com/ajkula/ajkurig/ui"
 )
 
 // ===== Types =====

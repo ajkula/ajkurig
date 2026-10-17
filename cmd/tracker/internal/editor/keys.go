@@ -7,7 +7,7 @@ import (
 	"github.com/hajimehoshi/ebiten/v2"
 	"github.com/hajimehoshi/ebiten/v2/inpututil"
 
-	"ajkurig/cmd/tracker/internal/song"
+	"github.com/ajkula/ajkurig/cmd/tracker/internal/song"
 )
 
 // ===== Types =====

@@ -3,8 +3,8 @@ package rig
 import (
 	"time"
 
-	"ajkurig/rng"
-	"ajkurig/ui"
+	"github.com/ajkula/ajkurig/rng"
+	"github.com/ajkula/ajkurig/ui"
 )
 
 // ===== Types =====

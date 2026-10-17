@@ -1,8 +1,8 @@
 package main
 
 import (
-	"ajkurig/colorx"
-	"ajkurig/world"
+	"github.com/ajkula/ajkurig/colorx"
+	"github.com/ajkula/ajkurig/world"
 )
 
 // ===== Constants =====

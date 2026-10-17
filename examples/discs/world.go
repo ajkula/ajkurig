@@ -3,19 +3,19 @@ package main
 import (
 	"time"
 
-	"ajkurig/audio"
-	"ajkurig/fx"
-	"ajkurig/i18n"
-	"ajkurig/input"
-	"ajkurig/mathx"
-	"ajkurig/progress"
-	"ajkurig/rig"
-	"ajkurig/rng"
-	"ajkurig/scores"
-	"ajkurig/shell"
-	"ajkurig/spatial"
-	"ajkurig/ui"
-	"ajkurig/world"
+	"github.com/ajkula/ajkurig/audio"
+	"github.com/ajkula/ajkurig/fx"
+	"github.com/ajkula/ajkurig/i18n"
+	"github.com/ajkula/ajkurig/input"
+	"github.com/ajkula/ajkurig/mathx"
+	"github.com/ajkula/ajkurig/progress"
+	"github.com/ajkula/ajkurig/rig"
+	"github.com/ajkula/ajkurig/rng"
+	"github.com/ajkula/ajkurig/scores"
+	"github.com/ajkula/ajkurig/shell"
+	"github.com/ajkula/ajkurig/spatial"
+	"github.com/ajkula/ajkurig/ui"
+	"github.com/ajkula/ajkurig/world"
 )
 
 // ===== Types =====

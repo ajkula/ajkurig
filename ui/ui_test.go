@@ -7,7 +7,7 @@ import (
 
 	"golang.org/x/image/font/sfnt"
 
-	"ajkurig/i18n"
+	"github.com/ajkula/ajkurig/i18n"
 )
 
 // ===== Types =====

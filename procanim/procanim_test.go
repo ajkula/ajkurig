@@ -3,7 +3,7 @@ package procanim
 import (
 	"testing"
 
-	"ajkurig/mathx"
+	"github.com/ajkula/ajkurig/mathx"
 )
 
 // ===== Public API =====

@@ -9,7 +9,7 @@ import (
 
 	"github.com/hajimehoshi/ebiten/v2/audio"
 
-	"ajkurig/rng"
+	"github.com/ajkula/ajkurig/rng"
 )
 
 // ===== Types =====

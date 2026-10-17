@@ -3,7 +3,7 @@ package scores
 import (
 	"testing"
 
-	"ajkurig/store"
+	"github.com/ajkula/ajkurig/store"
 )
 
 // ===== Public API =====

@@ -3,12 +3,12 @@ package main
 import (
 	"github.com/hajimehoshi/ebiten/v2"
 
-	"ajkurig/colorx"
-	"ajkurig/draw"
-	"ajkurig/i18n"
-	"ajkurig/mathx"
-	"ajkurig/progress"
-	"ajkurig/ui"
+	"github.com/ajkula/ajkurig/colorx"
+	"github.com/ajkula/ajkurig/draw"
+	"github.com/ajkula/ajkurig/i18n"
+	"github.com/ajkula/ajkurig/mathx"
+	"github.com/ajkula/ajkurig/progress"
+	"github.com/ajkula/ajkurig/ui"
 )
 
 // ===== Types =====

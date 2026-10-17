@@ -6,11 +6,11 @@ import (
 	"github.com/hajimehoshi/ebiten/v2"
 	"github.com/hajimehoshi/ebiten/v2/text/v2"
 
-	"ajkurig/i18n"
-	"ajkurig/input"
-	"ajkurig/mathx"
-	"ajkurig/rig"
-	"ajkurig/ui"
+	"github.com/ajkula/ajkurig/i18n"
+	"github.com/ajkula/ajkurig/input"
+	"github.com/ajkula/ajkurig/mathx"
+	"github.com/ajkula/ajkurig/rig"
+	"github.com/ajkula/ajkurig/ui"
 )
 
 // ===== Types =====

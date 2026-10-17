@@ -1,6 +1,6 @@
 package procanim
 
-import "ajkurig/mathx"
+import "github.com/ajkula/ajkurig/mathx"
 
 // ===== Types =====
 

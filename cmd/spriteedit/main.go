@@ -7,7 +7,7 @@ import (
 
 	"github.com/hajimehoshi/ebiten/v2"
 
-	"ajkurig/spriteeditor"
+	"github.com/ajkula/ajkurig/spriteeditor"
 )
 
 func main() {

@@ -13,7 +13,7 @@ import (
 	"os"
 	"strconv"
 
-	"ajkurig/sprite"
+	"github.com/ajkula/ajkurig/sprite"
 )
 
 // ===== Types =====
