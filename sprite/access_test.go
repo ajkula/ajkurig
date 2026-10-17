@@ -84,3 +84,44 @@ func TestAxisNamedReadsTheThreeAxes(t *testing.T) {
 		t.Fatal("w is not an axis")
 	}
 }
+
+func TestSurfaceFindsTheDrawingOfAFace(t *testing.T) {
+	sheet := NewHumanoid("hero", 64, 64)
+	torso := sheet.Parts[sheet.FindPart("torso")]
+	if torso.Surface(0, 0) != torso.Layer || torso.Surface(360, 0) != torso.Layer {
+		t.Fatal("the front face is the part's own drawing")
+	}
+	if torso.Surface(90, 0) != nil {
+		t.Fatal("a face never drawn has no surface")
+	}
+	top := torso.AddFace(0, 90)
+	if torso.Surface(0, 90) != top.Layer {
+		t.Fatal("an added face should be found by its turn and tilt")
+	}
+}
+
+func TestReleaseLimitFreesOnlyThatAxis(t *testing.T) {
+	sheet := NewHumanoid("hero", 64, 64)
+	shin := sheet.Parts[sheet.FindPart("leg_front_shin")]
+	shin.ReleaseLimit(AxisZ)
+	if shin.Limit(AxisZ, -40) != -40 || shin.Limit(AxisY, 40) != 10 {
+		t.Fatal("only the bend should be free")
+	}
+}
+
+func TestSymbolValueAndPixelsTextSpeakThePaletteSymbols(t *testing.T) {
+	sheet := NewHumanoid("hero", 64, 64)
+	value, isKnown := sheet.SymbolValue('r')
+	if !isKnown || sheet.Palette[value].Symbol != 'r' {
+		t.Fatal("r should name a palette entry")
+	}
+	if _, isKnown := sheet.SymbolValue('#'); isKnown {
+		t.Fatal("# is not in the palette")
+	}
+	layer := NewLayer()
+	layer.Set(3, 5, value)
+	layer.Set(5, 6, value)
+	if text := sheet.PixelsText(layer); text != "pixels 3 5\nr\n..r\nend\n" {
+		t.Fatalf("unexpected pixels text:\n%s", text)
+	}
+}

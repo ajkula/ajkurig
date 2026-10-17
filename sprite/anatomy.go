@@ -145,6 +145,10 @@ func (p *Part) SetLimit(axis Axis, limits AngleRange) {
 	p.LimitedAxes |= 1 << axis
 }
 
+func (p *Part) ReleaseLimit(axis Axis) {
+	p.LimitedAxes &^= 1 << axis
+}
+
 func (p *Part) Rotate(joint *Joint, axis Axis, degrees float64) float64 {
 	applied := math.Round(math.Remainder(p.Limit(axis, degrees), fullTurn)*tenthsOfDegree) / tenthsOfDegree
 	*joint.Rotation(axis) = applied

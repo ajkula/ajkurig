@@ -2,8 +2,10 @@ package main
 
 import (
 	"bytes"
+	"math"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -44,6 +46,15 @@ func readFile(t *testing.T, path string) string {
 		t.Fatal(err)
 	}
 	return string(data)
+}
+
+func reloadHero(t *testing.T, path string) *sprite.Sheet {
+	t.Helper()
+	sheet, err := sprite.Parse(readFile(t, path))
+	if err != nil {
+		t.Fatal(err)
+	}
+	return sheet
 }
 
 // ===== Tests =====
@@ -113,5 +124,126 @@ func TestSetPoseRefusesBadRequestsAndKeepsTheFile(t *testing.T) {
 	}
 	if readFile(t, path) != before {
 		t.Fatal("a refused change must leave the sprite file as it was")
+	}
+}
+
+func TestSetShiftMovesAPartInAKeyPose(t *testing.T) {
+	path := writeHero(t)
+	if _, err := runTool(t, "set", "shift", path, "walk", "0", "torso", "1", "-2"); err != nil {
+		t.Fatal(err)
+	}
+	sheet := reloadHero(t, path)
+	if shift := sheet.FindAnimation("walk").Frames[0].Pose[sheet.FindPart("torso")].Shift; shift != (sprite.Point{X: 1, Y: -2}) {
+		t.Fatalf("the torso should be shifted by 1 -2, got %v", shift)
+	}
+}
+
+func TestSetReachBringsTheFootOnThePoint(t *testing.T) {
+	path := writeHero(t)
+	before := reloadHero(t, path)
+	shin := before.FindPart("leg_front_shin")
+	pose := before.FindAnimation("walk").Frames[0].Pose
+	foot := before.BoneEnds(before.Transforms(pose))[shin][1]
+	target := []string{strconv.Itoa(int(foot[0]) + 3), strconv.Itoa(int(foot[1]) - 4)}
+	output, err := runTool(t, "set", "reach", path, "walk", "0", "leg_front_shin", target[0], target[1])
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.HasPrefix(output, "leg_front_shin ends at ") {
+		t.Fatalf("the tool should say where the foot landed, got:\n%s", output)
+	}
+	sheet := reloadHero(t, path)
+	landed := sheet.BoneEnds(sheet.Transforms(sheet.FindAnimation("walk").Frames[0].Pose))[shin][1]
+	wantedX, _ := strconv.ParseFloat(target[0], 64)
+	wantedY, _ := strconv.ParseFloat(target[1], 64)
+	if math.Hypot(landed[0]-wantedX, landed[1]-wantedY) > 1 {
+		t.Fatalf("the foot should land on %v, it is at %v", target, landed)
+	}
+	if _, err := runTool(t, "set", "reach", path, "walk", "0", "torso", "1", "1"); err == nil {
+		t.Fatal("only the end of a limb can reach")
+	}
+}
+
+func TestSetLimitAndAnatomyChangeTheRanges(t *testing.T) {
+	path := writeHero(t)
+	if _, err := runTool(t, "set", "limit", path, "head", "y", "-30", "30"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := runTool(t, "set", "limit", path, "leg_front_shin", "z", "free"); err != nil {
+		t.Fatal(err)
+	}
+	sheet := reloadHero(t, path)
+	if sheet.Parts[sheet.FindPart("head")].Limit(sprite.AxisY, 80) != 30 || sheet.Parts[sheet.FindPart("leg_front_shin")].Limit(sprite.AxisZ, -40) != -40 {
+		t.Fatal("the head turn should stop at 30 and the knee bend be free")
+	}
+	output, err := runTool(t, "set", "anatomy", path, "human")
+	if err != nil || !strings.Contains(output, "parts follow the human anatomy") {
+		t.Fatalf("the anatomy should be applied, got %v:\n%s", err, output)
+	}
+	if reloadHero(t, path).Parts[sheet.FindPart("leg_front_shin")].Limit(sprite.AxisZ, -40) != 0 {
+		t.Fatal("the anatomy should bring the knee limit back")
+	}
+	for _, arguments := range [][]string{{"limit", path, "head", "y", "30", "-30"}, {"anatomy", path, "dragon"}} {
+		if _, err := runTool(t, "set", arguments...); err == nil {
+			t.Fatalf("%v should be refused", arguments)
+		}
+	}
+}
+
+func TestSetSolidAndViewShapeTheParts(t *testing.T) {
+	path := writeHero(t)
+	if _, err := runTool(t, "set", "solid", path, "torso", "yes"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := runTool(t, "set", "view", path, "torso", "0", "90"); err != nil {
+		t.Fatal(err)
+	}
+	sheet := reloadHero(t, path)
+	torso := sheet.Parts[sheet.FindPart("torso")]
+	if !torso.IsSolid || torso.FindFace(0, 90) == nil {
+		t.Fatal("the torso should be solid with a top face")
+	}
+	if _, err := runTool(t, "set", "view", path, "torso", "0", "90"); err == nil {
+		t.Fatal("a face cannot be added twice")
+	}
+}
+
+func TestPaintWritesAndReadsPixelsBySymbol(t *testing.T) {
+	path := writeHero(t)
+	if _, err := runTool(t, "set", "view", path, "head", "90", "0"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := runTool(t, "set", "paint", path, "head", "90", "0", "40", "10", "r", "42", "11", "y"); err != nil {
+		t.Fatal(err)
+	}
+	output, err := runTool(t, "get", "paint", path, "head", "90", "0")
+	if err != nil || output != "pixels 40 10\nr\n..y\nend\n" {
+		t.Fatalf("the painted pixels should read back, got %v:\n%s", err, output)
+	}
+	if _, err := runTool(t, "set", "paint", path, "head", "90", "0", "40", "10", "."); err != nil {
+		t.Fatal(err)
+	}
+	if output, _ := runTool(t, "get", "paint", path, "head", "90", "0"); output != "pixels 42 11\ny\nend\n" {
+		t.Fatalf("a dot should erase, got:\n%s", output)
+	}
+	before := readFile(t, path)
+	for _, arguments := range [][]string{
+		{"paint", path, "head", "45", "0", "1", "1", "r"},
+		{"paint", path, "head", "90", "0", "1", "1", "#"},
+		{"paint", path, "head", "90", "0", "1", "1"},
+	} {
+		if _, err := runTool(t, "set", arguments...); err == nil {
+			t.Fatalf("%v should be refused", arguments)
+		}
+	}
+	if readFile(t, path) != before {
+		t.Fatal("refused paint must leave the file as it was")
+	}
+}
+
+func TestGetPaletteListsSymbolsAndColors(t *testing.T) {
+	output, err := runTool(t, "get", "palette", writeHero(t))
+	if err != nil || lineStarting(output, "r ") != "r 710000" {
+		t.Fatalf("the palette should list r as blood red, got %v:\n%s", err, output)
 	}
 }

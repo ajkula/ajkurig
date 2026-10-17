@@ -1,6 +1,15 @@
 package sprite
 
-import "fmt"
+import (
+	"fmt"
+	"math"
+	"slices"
+	"strings"
+)
+
+// ===== Constants =====
+
+const angleTolerance = 1e-6
 
 // ===== Public API =====
 
@@ -25,6 +34,28 @@ func (s *Sheet) PoseOf(moveName string, frame int) (Pose, FrameKind, error) {
 	return s.FramePose(animation, frame), animation.Frames[frame].Kind, nil
 }
 
+func (s *Sheet) SymbolValue(symbol byte) (uint8, bool) {
+	index := slices.IndexFunc(s.Palette, func(swatch Swatch) bool { return swatch.Symbol == symbol })
+	return uint8(max(index, 0)), index >= 0
+}
+
+func (s *Sheet) PixelsText(layer *Layer) string {
+	var builder strings.Builder
+	writePixels(&builder, s, layer)
+	return builder.String()
+}
+
+func (p *Part) Surface(turn, tilt float64) *Layer {
+	if isWholeTurn(turn) && isWholeTurn(tilt) {
+		return p.Layer
+	}
+	face := p.FindFace(turn, tilt)
+	if face == nil {
+		return nil
+	}
+	return face.Layer
+}
+
 // ===== Internal =====
 
 func (s *Sheet) findFrame(moveName string, frame int) (*Animation, error) {
@@ -36,4 +67,8 @@ func (s *Sheet) findFrame(moveName string, frame int) (*Animation, error) {
 		return nil, fmt.Errorf("%s has frames 0 to %d, not %d", moveName, len(animation.Frames)-1, frame)
 	}
 	return animation, nil
+}
+
+func isWholeTurn(degrees float64) bool {
+	return math.Abs(math.Remainder(degrees, fullTurn)) < angleTolerance
 }
