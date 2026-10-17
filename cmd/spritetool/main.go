@@ -248,9 +248,9 @@ func runParts(arguments []string) error {
 	}
 	rows := [][]cell{}
 	for _, part := range sheet.Parts {
-		row := []cell{croppedCell(part.Pixels, sheet.Width, sheet.Height)}
+		row := []cell{croppedCell(part.Layer)}
 		for _, view := range part.Views {
-			row = append(row, croppedCell(view.Pixels, sheet.Width, sheet.Height))
+			row = append(row, croppedCell(view.Layer))
 		}
 		rows = append(rows, row)
 		fmt.Printf("row %d: %s depth %d views %v\n", len(rows)-1, part.Name, part.Depth, viewTurns(part))
@@ -258,20 +258,11 @@ func runParts(arguments []string) error {
 	return save(flags.Arg(1), drawGrid(sheet, transpose(rows), max(1, *scale)))
 }
 
-func croppedCell(pixels []uint8, width, height int) cell {
-	left, top, right, bottom := width, height, 0, 0
-	for index, value := range pixels {
-		if value == sprite.Transparent {
-			continue
-		}
-		x, y := index%width, index/width
-		left, top, right, bottom = min(left, x), min(top, y), max(right, x+1), max(bottom, y+1)
-	}
-	area := sprite.Area{X: left, Y: top, Width: max(right-left, 1), Height: max(bottom-top, 1)}
+func croppedCell(layer *sprite.Layer) cell {
+	area := layer.Area()
+	area.Width, area.Height = max(area.Width, 1), max(area.Height, 1)
 	cropped := make([]uint8, area.Width*area.Height)
-	for y := top; y < bottom; y++ {
-		copy(cropped[(y-top)*area.Width:(y-top+1)*area.Width], pixels[y*width+left:y*width+right])
-	}
+	layer.Each(func(x, y int, value uint8) { cropped[(y-area.Y)*area.Width+x-area.X] = value })
 	return cell{cropped, area}
 }
 

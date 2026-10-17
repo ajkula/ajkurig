@@ -8,7 +8,7 @@ Ajkula's rig: a Go + Ebitengine framework for arcade games, extracted from Horde
 go run ./examples/discs        play the example
 go test ./...                  every test (headless, no window needed)
 go run ./cmd/tracker           the tracker editor
-go run ./cmd/spriteedit hero.spr   the sprite editor
+go run ./cmd/spriteedit hero.spr   the sprite editor (library: ajkurig/spriteeditor, a game can host it)
 go run ./cmd/spritetool          compose, turn and check sprites from the command line
 go run ./cmd/release -config examples/discs/release.json   build the example's archives
 ```

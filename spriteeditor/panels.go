@@ -1,4 +1,4 @@
-package editor
+package spriteeditor
 
 import (
 	"fmt"
@@ -49,7 +49,7 @@ const (
 	partListBottom  = 520
 	animationButton = 100
 	modeTabWidth    = 140
-	toolButtonWidth = 96
+	toolButtonWidth = 76
 	sectionGap      = 14
 	nextStepWidth   = 236
 )
@@ -59,7 +59,7 @@ var swatchSteps = []struct {
 	size  float32
 }{{20, swatchSize}, {45, 26}}
 
-var toolKeys = [toolCount]string{ToolPencil: "B", ToolFill: "G", ToolPicker: "I", ToolBone: "V", ToolPose: "R", ToolHand: "P", ToolTrace: "F", ToolPlace: "N"}
+var toolKeys = [toolCount]string{ToolPencil: "B", ToolFill: "G", ToolPicker: "I", ToolBone: "V", ToolPose: "R", ToolHand: "P", ToolTrace: "F", ToolPlace: "N", ToolSelect: "C"}
 
 var partPanels = [modeCount]func(e *Editor, y float32){
 	ModeSkeleton: (*Editor).layoutSkeletonParts,
@@ -69,10 +69,10 @@ var partPanels = [modeCount]func(e *Editor, y float32){
 }
 
 var sidePanels = [modeCount][]func(e *Editor, y float32) float32{
-	ModeSkeleton: {(*Editor).layoutStartOver, (*Editor).layoutCanvasSize, (*Editor).layoutBodyPosition, (*Editor).layoutBodySize, (*Editor).layoutOrientation, (*Editor).layoutPreview},
-	ModePoses:    {(*Editor).layoutSnapshotSection, (*Editor).layoutPostureSection, (*Editor).layoutTurnSection, (*Editor).layoutTwinSection, (*Editor).layoutPictureSection, (*Editor).layoutPreview},
+	ModeSkeleton: {(*Editor).layoutStartOver, (*Editor).layoutCanvasSize, (*Editor).layoutBodyPosition, (*Editor).layoutBodySize, (*Editor).layoutOrientation, (*Editor).layoutAnatomySection, (*Editor).layoutPreview},
+	ModePoses:    {(*Editor).layoutSnapshotSection, (*Editor).layoutPostureSection, (*Editor).layoutRotationSection, (*Editor).layoutTwinSection, (*Editor).layoutPictureSection, (*Editor).layoutPreview},
 	ModeDraw:     {(*Editor).layoutPalette, (*Editor).layoutViewSection, (*Editor).layoutReferenceSection, (*Editor).layoutDrawDisplay, (*Editor).layoutPreview},
-	ModeAnimate:  {(*Editor).layoutPreview, (*Editor).layoutTurnSection, (*Editor).layoutTwinSection, (*Editor).layoutAnimateDisplay, (*Editor).layoutFramePose, (*Editor).layoutSnapshotPicker, (*Editor).layoutPalette},
+	ModeAnimate:  {(*Editor).layoutPreview, (*Editor).layoutRotationSection, (*Editor).layoutTwinSection, (*Editor).layoutAnimateDisplay, (*Editor).layoutFramePose, (*Editor).layoutSnapshotPicker, (*Editor).layoutPalette},
 }
 
 var bottomPanels = [modeCount]func(e *Editor){
@@ -191,6 +191,7 @@ func (e *Editor) layoutDrawParts(y float32) {
 		{"MIRROR", "part.mirror", false, e.mirrorPart},
 	})
 	y = e.layoutPanelRow(y, []rowButton{{"ERASE THIS PART'S PAINT", "part.clear", false, e.clearPartPaint}})
+	y = e.layoutPanelRow(y, []rowButton{{"SOLID VOLUME", "part.solid", e.currentPart().IsSolid, e.toggleSolid}})
 	e.layoutInfoLines(y+rowGap, []string{"Only the selected part takes paint.", "Right click erases."})
 }
 
@@ -358,22 +359,26 @@ func (e *Editor) layoutAnimateDisplay(y float32) float32 {
 }
 
 func (e *Editor) layoutTwinSection(y float32) float32 {
-	y = e.sectionTitle(y, "TWIN LIMBS  (what the other leg or arm does)")
+	y = e.sectionTitle(y, "TWIN LIMBS AND PINS  (pin: hand, foot or hips stays put)")
+	isPinned := e.pinIndex(e.currentPart().Name) >= 0
 	return e.layoutSideRow(y, []rowButton{
 		{"OFF", "link.off", e.link == LinkOff, func() { e.link = LinkOff }},
 		{"MIRROR", "link.mirror", e.link == LinkMirror, func() { e.link = LinkMirror }},
 		{"SAME", "link.same", e.link == LinkSame, func() { e.link = LinkSame }},
+		{"PIN", "pin.toggle", isPinned, e.togglePin},
+		{"UNPIN ALL", "pin.clear", false, e.clearPins},
 	})
 }
 
 func (e *Editor) layoutPreview(y float32) float32 {
 	animation := e.currentAnimation()
 	frame := animation.FrameAt(e.previewTick)
-	y = e.sectionTitle(y, fmt.Sprintf("PREVIEW  %s  (frame %d of %d)", animation.Name, frame+1, len(animation.Frames)))
-	scale := previewScale(e.sheet.Width, e.sheet.Height)
-	rect := Rect{sideLeft, y, float32(e.sheet.Width) * scale, float32(e.sheet.Height) * scale}
+	y = e.sectionTitle(y, e.previewTitle(animation, frame))
+	area := e.preview.area
+	scale := min(previewScale(area.Width, area.Height), (timelineTop-sectionGap-y)/float32(area.Height))
+	rect := Rect{sideLeft, y, float32(area.Width) * scale, float32(area.Height) * scale}
 	e.ui.Fill(rect, colorCheckerA)
-	e.ui.Image(rect, e.previewImage, 1)
+	e.ui.Image(rect, e.preview.image, 1)
 	e.layoutPreviewBones(rect, scale, frame, animation)
 	e.ui.Outline(rect, colorEdge)
 	label := [2]string{"PLAY", "PAUSE"}[mathx.BoolToIndex(e.isPreviewPlaying)]
@@ -384,10 +389,10 @@ func (e *Editor) layoutPreview(y float32) float32 {
 }
 
 func (e *Editor) layoutPreviewBones(rect Rect, scale float32, frame int, animation *sprite.Animation) {
-	if !e.isBones || animation.Frames[frame].Pixels != nil {
+	if !e.isBones || e.isSpinning() || animation.Frames[frame].Baked != nil {
 		return
 	}
-	e.layoutPoseBones(rect, scale, e.sheet.FramePose(animation, frame))
+	e.layoutPoseBones(rect, scale, e.preview.area, e.sheet.FramePose(animation, frame))
 }
 
 func previewScale(width, height int) float32 {
@@ -481,7 +486,7 @@ func (e *Editor) layoutFrameCell(index int, rect Rect) {
 		e.frameIndex = index
 	}
 	kind := [2]string{"AUTO", "KEY"}[mathx.BoolToIndex(frame.Kind == sprite.FrameKey)]
-	kind = [2]string{kind, "BAKED"}[mathx.BoolToIndex(frame.Pixels != nil)]
+	kind = [2]string{kind, "BAKED"}[mathx.BoolToIndex(frame.Baked != nil)]
 	e.ui.Text(rect.X+rect.W/2, rect.Y+6, kind, colorText, text.AlignCenter)
 	e.ui.Text(rect.X+rect.W/2, rect.Y+24, fmt.Sprint(frame.Ticks), colorTextDim, text.AlignCenter)
 }
@@ -498,7 +503,7 @@ func (e *Editor) layoutFrameButtons(y float32) {
 		{"TIME", []rowButton{{"SHORTER", "frame.shorter", false, func() { e.changeTicks(-1) }}, {"LONGER", "frame.longer", false, func() { e.changeTicks(1) }}}, 76},
 		{"TYPE", []rowButton{
 			{[2]string{"MAKE AUTO", "MAKE KEY"}[mathx.BoolToIndex(frame.Kind == sprite.FrameTween)], "frame.kind", false, e.toggleFrameKind},
-			{[2]string{"BAKE", "UNBAKE"}[mathx.BoolToIndex(frame.Pixels != nil)], "frame.bake", frame.Pixels != nil, e.toggleBake},
+			{[2]string{"BAKE", "UNBAKE"}[mathx.BoolToIndex(frame.Baked != nil)], "frame.bake", frame.Baked != nil, e.toggleBake},
 		}, 96},
 	}
 	x := float32(panelLeft + timelineLabel)

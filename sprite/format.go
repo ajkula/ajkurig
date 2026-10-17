@@ -20,7 +20,7 @@ type parser struct {
 	symbols          [256]int16
 	hasCustomPalette bool
 	isReadingPixels  bool
-	pixelTarget      []uint8
+	pixelTarget      *Layer
 	pixelOrigin      Point
 	pixelRow         int
 	view             *View
@@ -44,6 +44,7 @@ var directives = map[string]func(p *parser, fields []string) error{
 	"tip":      (*parser).readTip,
 	"limit":    (*parser).readLimit,
 	"depth":    (*parser).readDepth,
+	"solid":    (*parser).readSolid,
 	"view":     (*parser).readView,
 	"pixels":   (*parser).readPixels,
 	"anim":     (*parser).readAnimation,
@@ -55,6 +56,12 @@ var directives = map[string]func(p *parser, fields []string) error{
 var frameKinds = map[string]FrameKind{"key": FrameKey, "tween": FrameTween}
 
 var loopNames = map[bool]string{true: "loop", false: "once"}
+
+var axisByName = map[string]Axis{"x": AxisX, "y": AxisY, "z": AxisZ}
+
+var limitPrefixes = [axisCount]string{AxisX: "limit x ", AxisY: "limit y ", AxisZ: "limit "}
+
+var writtenAxes = [axisCount]Axis{AxisZ, AxisX, AxisY}
 
 // ===== Public API =====
 
@@ -201,15 +208,17 @@ func (p *parser) readPivot(fields []string) error {
 }
 
 func (p *parser) readLimit(fields []string) error {
-	if p.part == nil || len(fields) != 2 {
-		return errors.New("limit belongs to a part and needs the smallest and largest angle, like: limit 0 150")
+	if p.part == nil || len(fields) < 2 || len(fields) > 3 {
+		return errors.New("limit belongs to a part and needs an optional axis x, y or z, then the smallest and largest angle, like: limit 0 150")
 	}
-	lowest, lowestErr := strconv.ParseFloat(fields[0], 64)
-	highest, highestErr := strconv.ParseFloat(fields[1], 64)
-	if lowestErr != nil || highestErr != nil || lowest > highest {
-		return fmt.Errorf("limit needs two angles in order, got %q", strings.Join(fields, " "))
+	axisName := append(fields[:len(fields)-2:len(fields)-2], "z")[0]
+	axis, isAxis := axisByName[axisName]
+	lowest, lowestErr := strconv.ParseFloat(fields[len(fields)-2], 64)
+	highest, highestErr := strconv.ParseFloat(fields[len(fields)-1], 64)
+	if !isAxis || lowestErr != nil || highestErr != nil || lowest > highest {
+		return fmt.Errorf("limit needs an axis x, y or z and two angles in order, got %q", strings.Join(fields, " "))
 	}
-	p.part.Range, p.part.IsLimited = [2]float64{lowest, highest}, true
+	p.part.SetLimit(axis, AngleRange{lowest, highest})
 	return nil
 }
 
@@ -225,17 +234,29 @@ func (p *parser) readDepth(fields []string) error {
 	return nil
 }
 
-func (p *parser) readView(fields []string) error {
-	if p.part == nil || len(fields) < 1 || len(fields) > 2 {
-		return errors.New("view belongs to a part and needs a turn angle, like: view 90, or a turn and a drawing name, like: view 0 side")
+func (p *parser) readSolid(fields []string) error {
+	if p.part == nil || len(fields) > 0 {
+		return errors.New("solid belongs to a part and takes nothing after it")
 	}
-	turn, err := strconv.ParseFloat(fields[0], 64)
-	name := append(fields[1:], "")[0]
-	isTaken := p.part.FindDrawing(name) != nil || (name == "" && p.part.FindView(turn) != nil)
-	if err != nil || isTaken {
-		return fmt.Errorf("view needs a new turn angle or a new drawing name, got %q", strings.Join(fields, " "))
+	p.part.IsSolid = true
+	return nil
+}
+
+func (p *parser) readView(fields []string) error {
+	if p.part == nil || len(fields) < 1 || len(fields) > 3 {
+		return errors.New("view belongs to a part and needs a turn angle, like: view 90, then an optional tilt and drawing name, like: view 0 90 top")
+	}
+	hasName := !isNumber(fields[len(fields)-1])
+	name := append(fields[len(fields)-boolToInt(hasName):], "")[0]
+	angles := append(fields[:len(fields)-boolToInt(hasName):len(fields)-boolToInt(hasName)], "0")
+	turn, err := strconv.ParseFloat(angles[0], 64)
+	tilt, tiltErr := strconv.ParseFloat(angles[1], 64)
+	isTaken := p.part.FindDrawing(name) != nil || (name == "" && p.part.FindFace(turn, tilt) != nil)
+	if err != nil || tiltErr != nil || len(angles) > 3 || isTaken {
+		return fmt.Errorf("view needs a new turn and tilt or a new drawing name, got %q", strings.Join(fields, " "))
 	}
 	p.view = p.part.AddDrawing(name, turn)
+	p.view.Tilt = tilt
 	return nil
 }
 
@@ -264,18 +285,16 @@ func (p *parser) readPixels(fields []string) error {
 	return nil
 }
 
-func (p *parser) pixelTargetFor() ([]uint8, error) {
+func (p *parser) pixelTargetFor() (*Layer, error) {
 	if p.frame != nil {
-		p.frame.Pixels = make([]uint8, p.sheet.Width*p.sheet.Height)
-		return p.frame.Pixels, nil
+		p.frame.Baked = NewLayer()
+		return p.frame.Baked, nil
 	}
 	if p.view != nil {
-		p.view.Invalidate()
-		return p.view.Pixels, nil
+		return p.view.Layer, nil
 	}
 	if p.part != nil {
-		p.part.isStale = true
-		return p.part.Pixels, nil
+		return p.part.Layer, nil
 	}
 	return nil, errors.New("pixels belong to a part or a frame")
 }
@@ -300,11 +319,10 @@ func (p *parser) writePixel(x, y int, symbol byte) error {
 	if value == unknownSymbol {
 		return fmt.Errorf("symbol %q is not in the palette", symbol)
 	}
-	isInside := x >= 0 && y >= 0 && x < p.sheet.Width && y < p.sheet.Height
-	if !isInside {
-		return fmt.Errorf("pixel %d,%d is outside the %dx%d sprite", x, y, p.sheet.Width, p.sheet.Height)
+	if !isInWorkspace(x, y) {
+		return fmt.Errorf("pixel %d,%d is more than %d pixels away", x, y, workspaceReach)
 	}
-	p.pixelTarget[y*p.sheet.Width+x] = uint8(value)
+	p.pixelTarget.Set(x, y, uint8(value))
 	return nil
 }
 
@@ -344,18 +362,23 @@ func (p *parser) readFrame(fields []string) error {
 
 func (p *parser) readPose(fields []string) error {
 	target := p.poseTarget()
-	if target == nil || len(fields) < 4 || len(fields) > 6 {
-		return errors.New("pose belongs to a frame or a snapshot, like: pose arm 45 0 0, with an optional turn and drawing after")
+	if target == nil || len(fields) < 4 || len(fields) > 7 {
+		return errors.New("pose belongs to a frame or a snapshot, like: pose arm 45 0 0, with an optional turn, tilt and drawing after")
 	}
+	extras := fields[4:]
+	hasDrawing := len(extras) > 0 && !isNumber(extras[len(extras)-1])
+	drawing := append(extras[len(extras)-boolToInt(hasDrawing):], "")[0]
+	rotations := append(extras[:len(extras)-boolToInt(hasDrawing):len(extras)-boolToInt(hasDrawing)], "0", "0")
 	index := p.sheet.FindPart(fields[0])
 	angle, err := strconv.ParseFloat(fields[1], 64)
 	shift, shiftErr := readInts(fields[2:4], 2)
-	turn, turnErr := strconv.ParseFloat(append(fields[4:], "0")[0], 64)
-	if index < 0 || err != nil || shiftErr != nil || turnErr != nil {
-		return fmt.Errorf("pose needs a known part, an angle, two offsets and an optional turn, got %q", strings.Join(fields, " "))
+	turn, turnErr := strconv.ParseFloat(rotations[0], 64)
+	tilt, tiltErr := strconv.ParseFloat(rotations[1], 64)
+	if index < 0 || len(rotations) > 4 || err != nil || shiftErr != nil || turnErr != nil || tiltErr != nil {
+		return fmt.Errorf("pose needs a known part, an angle, two offsets, then an optional turn, tilt and drawing, got %q", strings.Join(fields, " "))
 	}
 	*target = p.sheet.Grow(*target)
-	(*target)[index] = Joint{Angle: angle, Shift: Point{shift[0], shift[1]}, Turn: turn, Drawing: append(fields[min(5, len(fields)):], "")[0]}
+	(*target)[index] = Joint{Angle: angle, Shift: Point{shift[0], shift[1]}, Turn: turn, Tilt: tilt, Drawing: drawing}
 	return nil
 }
 
@@ -412,6 +435,11 @@ func (p *parser) usePalette(palette []Swatch) {
 	}
 }
 
+func isNumber(field string) bool {
+	_, err := strconv.ParseFloat(field, 64)
+	return err == nil
+}
+
 func readInts(fields []string, count int) ([]int, error) {
 	if len(fields) != count {
 		return nil, fmt.Errorf("expected %d numbers, got %q", count, strings.Join(fields, " "))
@@ -433,17 +461,26 @@ func writePart(builder *strings.Builder, sheet *Sheet, part *Part) {
 		parentName = sheet.Parts[part.Parent].Name
 	}
 	fmt.Fprintf(builder, "\npart %s\nparent %s\npivot %d %d\ntip %d %d\n", part.Name, parentName, part.Pivot.X, part.Pivot.Y, part.Tip.X, part.Tip.Y)
-	if part.IsLimited {
-		fmt.Fprintf(builder, "limit %s %s\n", strconv.FormatFloat(part.Range[0], 'f', -1, 64), strconv.FormatFloat(part.Range[1], 'f', -1, 64))
+	for _, axis := range writtenAxes {
+		writeLimitIf(builder, part, axis, part.LimitedAxes&(1<<axis) != 0)
 	}
 	if part.Depth != 0 {
 		fmt.Fprintf(builder, "depth %d\n", part.Depth)
 	}
-	writePixels(builder, sheet, part.Pixels)
+	builder.WriteString([2]string{"", "solid\n"}[boolToInt(part.IsSolid)])
+	writePixels(builder, sheet, part.Layer)
 	for _, view := range part.Views {
-		fmt.Fprintf(builder, "view %s%s\n", strconv.FormatFloat(view.Turn, 'f', -1, 64), [2]string{"", " " + view.Name}[boolToInt(view.Name != "")])
-		writePixels(builder, sheet, view.Pixels)
+		fmt.Fprintf(builder, "view %s%s%s\n", strconv.FormatFloat(view.Turn, 'f', -1, 64), [2]string{"", " " + strconv.FormatFloat(view.Tilt, 'f', -1, 64)}[boolToInt(view.Tilt != 0)], [2]string{"", " " + view.Name}[boolToInt(view.Name != "")])
+		writePixels(builder, sheet, view.Layer)
 	}
+}
+
+func writeLimitIf(builder *strings.Builder, part *Part, axis Axis, isLimited bool) {
+	if !isLimited {
+		return
+	}
+	limits := part.Limits[axis]
+	fmt.Fprintf(builder, "%s%s %s\n", limitPrefixes[axis], strconv.FormatFloat(limits[0], 'f', -1, 64), strconv.FormatFloat(limits[1], 'f', -1, 64))
 }
 
 func writeAnimation(builder *strings.Builder, sheet *Sheet, animation *Animation) {
@@ -458,8 +495,8 @@ func writeFrame(builder *strings.Builder, sheet *Sheet, frame *Frame) {
 	for index, joint := range frame.Pose {
 		writeJointIf(builder, sheet, index, joint, frame.Kind == FrameKey && index < len(sheet.Parts) && joint != Joint{})
 	}
-	if frame.Pixels != nil {
-		writePixels(builder, sheet, frame.Pixels)
+	if frame.Baked != nil {
+		writePixels(builder, sheet, frame.Baked)
 	}
 }
 
@@ -476,30 +513,26 @@ func writeJointIf(builder *strings.Builder, sheet *Sheet, index int, joint Joint
 	}
 	angle := strconv.FormatFloat(joint.Angle, 'f', -1, 64)
 	fmt.Fprintf(builder, "pose %s %s %d %d", sheet.Parts[index].Name, angle, joint.Shift.X, joint.Shift.Y)
-	builder.WriteString([2]string{"", " " + strconv.FormatFloat(joint.Turn, 'f', -1, 64)}[boolToInt(joint.Turn != 0 || joint.Drawing != "")])
+	builder.WriteString([2]string{"", " " + strconv.FormatFloat(joint.Turn, 'f', -1, 64)}[boolToInt(joint.Turn != 0 || joint.Tilt != 0 || joint.Drawing != "")])
+	builder.WriteString([2]string{"", " " + strconv.FormatFloat(joint.Tilt, 'f', -1, 64)}[boolToInt(joint.Tilt != 0)])
 	builder.WriteString([2]string{"", " " + joint.Drawing}[boolToInt(joint.Drawing != "")])
 	builder.WriteByte('\n')
 }
 
-func writePixels(builder *strings.Builder, sheet *Sheet, pixels []uint8) {
-	bounds := pixelBounds(pixels, sheet.Width, sheet.Height)
-	if bounds.isEmpty() {
+func writePixels(builder *strings.Builder, sheet *Sheet, layer *Layer) {
+	area := layer.Area()
+	if area.isEmpty() {
 		builder.WriteString("pixels 0 0\nend\n")
 		return
 	}
-	fmt.Fprintf(builder, "pixels %d %d\n", bounds.minX, bounds.minY)
-	for y := bounds.minY; y < bounds.maxY; y++ {
-		row := pixels[y*sheet.Width+bounds.minX : y*sheet.Width+bounds.maxX]
-		builder.WriteString(strings.TrimRight(symbolsOf(sheet, row), string(transparentSymbol)))
+	fmt.Fprintf(builder, "pixels %d %d\n", area.X, area.Y)
+	row := make([]byte, area.Width)
+	for y := area.Y; y < area.Y+area.Height; y++ {
+		for column := range row {
+			row[column] = sheet.Palette[min(int(layer.At(area.X+column, y)), len(sheet.Palette)-1)].Symbol
+		}
+		builder.WriteString(strings.TrimRight(string(row), string(transparentSymbol)))
 		builder.WriteByte('\n')
 	}
 	builder.WriteString("end\n")
-}
-
-func symbolsOf(sheet *Sheet, row []uint8) string {
-	symbols := make([]byte, len(row))
-	for index, value := range row {
-		symbols[index] = sheet.Palette[min(int(value), len(sheet.Palette)-1)].Symbol
-	}
-	return string(symbols)
 }

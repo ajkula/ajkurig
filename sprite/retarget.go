@@ -59,7 +59,7 @@ func (s *Sheet) retargetJoint(index int, source *Sheet, pose Pose, sourceRotatio
 		return parentRotation
 	}
 	joint := jointAt(pose, match)
-	result[index] = Joint{Angle: s.aimAngle(index, source, match, joint.Angle, sourceRotations[match], parentRotation), Shift: joint.Shift, Turn: joint.Turn}
+	result[index] = Joint{Angle: s.aimAngle(index, source, match, joint.Angle, sourceRotations[match], parentRotation), Shift: joint.Shift, Turn: joint.Turn, Tilt: joint.Tilt}
 	rotations[index] = parentRotation + result[index].Angle
 	return rotations[index]
 }

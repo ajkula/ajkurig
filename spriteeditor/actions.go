@@ -1,4 +1,4 @@
-package editor
+package spriteeditor
 
 import (
 	"fmt"
@@ -137,13 +137,11 @@ func (e *Editor) toggleFrameKind() {
 func (e *Editor) toggleBake() {
 	e.record()
 	frame := e.currentFrame()
-	if frame.Pixels != nil {
-		frame.Pixels = nil
+	if frame.Baked != nil {
+		frame.Baked = nil
 		return
 	}
-	pose := e.sheet.FramePose(e.currentAnimation(), e.frameIndex)
-	frame.Pixels = make([]uint8, e.sheet.Width*e.sheet.Height)
-	e.sheet.Render(pose, frame.Pixels)
+	e.sheet.Bake(e.currentAnimation(), e.frameIndex)
 	e.isRestView = false
 	e.notify("Frame baked: the pencil now retouches this frame only", colorGood)
 }
@@ -162,7 +160,7 @@ func (e *Editor) duplicateAnimation() {
 	source := e.currentAnimation()
 	copied := &sprite.Animation{Name: e.uniqueAnimationName(source.Name), IsLooping: source.IsLooping}
 	for _, frame := range source.Frames {
-		copied.Frames = append(copied.Frames, sprite.Frame{Kind: frame.Kind, Ticks: frame.Ticks, Pose: slices.Clone(frame.Pose), Pixels: slices.Clone(frame.Pixels)})
+		copied.Frames = append(copied.Frames, frame.Copy())
 	}
 	e.sheet.Animations = slices.Insert(e.sheet.Animations, e.animationIndex+1, copied)
 	e.selectAnimation(e.animationIndex + 1)

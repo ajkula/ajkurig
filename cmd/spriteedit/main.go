@@ -7,7 +7,7 @@ import (
 
 	"github.com/hajimehoshi/ebiten/v2"
 
-	"ajkurig/cmd/spriteedit/internal/editor"
+	"ajkurig/spriteeditor"
 )
 
 func main() {
@@ -18,6 +18,7 @@ func main() {
 	move := flag.String("move", "", "move to open in the animate step")
 	part := flag.String("part", "", "part to select")
 	turn := flag.Float64("turn", 0, "turn of the whole body while drawing, in degrees")
+	tilt := flag.Float64("tilt", 0, "tilt of the whole body while drawing, in degrees: 90 looks from the top")
 	flag.Parse()
 	path := flag.Arg(0)
 	if path == "" {
@@ -27,14 +28,10 @@ func main() {
 	if _, err := fmt.Sscanf(*size, "%dx%d", &width, &height); err != nil || width < 1 || height < 1 {
 		log.Fatalf("bad -size %q, expected something like 48x64", *size)
 	}
-	monitorWidth, monitorHeight := ebiten.Monitor().Size()
-	scale := min(1, float64(monitorWidth)*0.94/editor.LogicalWidth, float64(monitorHeight)*0.9/editor.LogicalHeight)
-	ebiten.SetWindowSize(int(editor.LogicalWidth*scale), int(editor.LogicalHeight*scale))
-	ebiten.SetWindowResizingMode(ebiten.WindowResizingModeEnabled)
-	ebiten.SetWindowTitle("ajkurig Sprite Editor")
-	sprites := editor.New(path, width, height)
+	spriteeditor.ConfigureWindow()
+	sprites := spriteeditor.New(path, width, height)
 	sprites.SetSnapshot(*snapshot)
-	sprites.Open(editor.Opening{Step: *step, Move: *move, Part: *part, Turn: *turn})
+	sprites.Open(spriteeditor.Opening{Step: *step, Move: *move, Part: *part, Turn: *turn, Tilt: *tilt})
 	if *reference != "" {
 		sprites.SetReference(*reference)
 	}

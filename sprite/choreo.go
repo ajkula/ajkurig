@@ -290,14 +290,11 @@ func (s *Sheet) balanceMiss(pose Pose, step Step) float64 {
 	return massX - footX - step.Lead
 }
 
-func (p *Part) centroid() (float64, float64, float64) {
+func (l *Layer) centroid() (float64, float64, float64) {
 	totalX, totalY, count := 0.0, 0.0, 0.0
-	for index, value := range p.Pixels {
-		if value == Transparent {
-			continue
-		}
-		totalX, totalY, count = totalX+float64(index%p.width)+0.5, totalY+float64(index/p.width)+0.5, count+1
-	}
+	l.Each(func(x, y int, _ uint8) {
+		totalX, totalY, count = totalX+float64(x)+0.5, totalY+float64(y)+0.5, count+1
+	})
 	if count == 0 {
 		return 0, 0, 0
 	}

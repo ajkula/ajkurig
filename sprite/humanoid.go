@@ -7,14 +7,12 @@ type humanoidBone struct {
 	parent string
 	pivot  [2]float64
 	tip    [2]float64
-	limits [2]float64
 }
 
 type hangerSpec struct {
 	name     string
 	parent   string
 	children [2]string
-	limits   [2]float64
 }
 
 type moveFrame struct {
@@ -33,24 +31,24 @@ type move struct {
 // ===== Constants =====
 
 var humanoidBones = []humanoidBone{
-	{"leg_back_thigh", "pelvis", [2]float64{-0.03, 0.53}, [2]float64{-0.03, 0.73}, [2]float64{-120, 50}},
-	{"leg_back_shin", "leg_back_thigh", [2]float64{-0.03, 0.73}, [2]float64{-0.03, 0.94}, [2]float64{0, 150}},
-	{"arm_back_upper", "shoulders", [2]float64{-0.07, 0.25}, [2]float64{-0.07, 0.41}, [2]float64{-180, 70}},
-	{"arm_back_fore", "arm_back_upper", [2]float64{-0.07, 0.41}, [2]float64{-0.07, 0.55}, [2]float64{-150, 0}},
-	{"hips", "", [2]float64{0, 0.52}, [2]float64{0, 0.55}, [2]float64{-180, 180}},
-	{"leg_front_thigh", "pelvis", [2]float64{0.03, 0.53}, [2]float64{0.03, 0.73}, [2]float64{-120, 50}},
-	{"leg_front_shin", "leg_front_thigh", [2]float64{0.03, 0.73}, [2]float64{0.03, 0.94}, [2]float64{0, 150}},
-	{"torso", "hips", [2]float64{0, 0.5}, [2]float64{0, 0.22}, [2]float64{-35, 50}},
-	{"head", "torso", [2]float64{0, 0.21}, [2]float64{0, 0.06}, [2]float64{-35, 35}},
-	{"arm_front_upper", "shoulders", [2]float64{0.06, 0.25}, [2]float64{0.06, 0.41}, [2]float64{-180, 70}},
-	{"arm_front_fore", "arm_front_upper", [2]float64{0.06, 0.41}, [2]float64{0.06, 0.55}, [2]float64{-150, 0}},
-	{"shoulders", "torso", [2]float64{0, 0.25}, [2]float64{0, 0.25}, [2]float64{-45, 45}},
-	{"pelvis", "hips", [2]float64{0, 0.53}, [2]float64{0, 0.53}, [2]float64{-35, 35}},
+	{"leg_back_thigh", "pelvis", [2]float64{-0.03, 0.53}, [2]float64{-0.03, 0.73}},
+	{"leg_back_shin", "leg_back_thigh", [2]float64{-0.03, 0.73}, [2]float64{-0.03, 0.94}},
+	{"arm_back_upper", "shoulders", [2]float64{-0.07, 0.25}, [2]float64{-0.07, 0.41}},
+	{"arm_back_fore", "arm_back_upper", [2]float64{-0.07, 0.41}, [2]float64{-0.07, 0.55}},
+	{"hips", "", [2]float64{0, 0.52}, [2]float64{0, 0.55}},
+	{"leg_front_thigh", "pelvis", [2]float64{0.03, 0.53}, [2]float64{0.03, 0.73}},
+	{"leg_front_shin", "leg_front_thigh", [2]float64{0.03, 0.73}, [2]float64{0.03, 0.94}},
+	{"torso", "hips", [2]float64{0, 0.5}, [2]float64{0, 0.22}},
+	{"head", "torso", [2]float64{0, 0.21}, [2]float64{0, 0.06}},
+	{"arm_front_upper", "shoulders", [2]float64{0.06, 0.25}, [2]float64{0.06, 0.41}},
+	{"arm_front_fore", "arm_front_upper", [2]float64{0.06, 0.41}, [2]float64{0.06, 0.55}},
+	{"shoulders", "torso", [2]float64{0, 0.25}, [2]float64{0, 0.25}},
+	{"pelvis", "hips", [2]float64{0, 0.53}, [2]float64{0, 0.53}},
 }
 
 var hangers = []hangerSpec{
-	{"shoulders", "torso", [2]string{"arm_front_upper", "arm_back_upper"}, [2]float64{-45, 45}},
-	{"pelvis", "hips", [2]string{"leg_front_thigh", "leg_back_thigh"}, [2]float64{-35, 35}},
+	{"shoulders", "torso", [2]string{"arm_front_upper", "arm_back_upper"}},
+	{"pelvis", "hips", [2]string{"leg_front_thigh", "leg_back_thigh"}},
 }
 
 var (
@@ -109,6 +107,7 @@ func NewHumanoid(name string, width, height int) *Sheet {
 	for index, bone := range humanoidBones {
 		sheet.Parts[index].Parent = max(sheet.FindPart(bone.parent), NoParent)
 	}
+	sheet.ApplyAnatomy(HumanAnatomy)
 	for _, move := range humanoidMoves {
 		sheet.Animations = append(sheet.Animations, sheet.buildMove(move))
 	}
@@ -142,7 +141,8 @@ func (s *Sheet) addHanger(hanger hangerSpec) bool {
 	}
 	firstPivot, secondPivot := s.Parts[first].Pivot, s.Parts[second].Pivot
 	index := s.AddPart(hanger.name, parent, Point{(firstPivot.X + secondPivot.X) / 2, (firstPivot.Y + secondPivot.Y) / 2})
-	s.Parts[index].Range, s.Parts[index].IsLimited = hanger.limits, true
+	limits, _ := HumanAnatomy.LimitsOf(hanger.name)
+	s.Parts[index].Limits, s.Parts[index].LimitedAxes = limits, everyAxis
 	s.Parts[first].Parent, s.Parts[second].Parent = index, index
 	return true
 }
@@ -152,7 +152,7 @@ func (s *Sheet) addBone(bone humanoidBone, width, height int) {
 		return Point{width/2 + int(at[0]*float64(height)), int(at[1] * float64(height))}
 	}
 	part := s.Parts[s.AddPart(bone.name, NoParent, place(bone.pivot))]
-	part.Tip, part.Range, part.IsLimited = place(bone.tip), bone.limits, true
+	part.Tip = place(bone.tip)
 }
 
 func (s *Sheet) buildMove(move move) *Animation {
@@ -169,7 +169,7 @@ func (s *Sheet) buildPose(frame moveFrame) Pose {
 	}
 	pose := s.Grow(nil)
 	for name, angle := range frame.angles {
-		pose[s.FindPart(name)].Angle = s.Parts[s.FindPart(name)].Limit(angle)
+		pose[s.FindPart(name)].Angle = s.Parts[s.FindPart(name)].Limit(AxisZ, angle)
 	}
 	for name, shift := range frame.shifts {
 		pose[s.FindPart(name)].Shift = shift

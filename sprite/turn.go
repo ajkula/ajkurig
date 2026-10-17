@@ -8,19 +8,27 @@ import (
 // ===== Types =====
 
 type View struct {
-	Turn   float64
-	Name   string
-	Pixels []uint8
-	layer  *Part
+	Turn float64
+	Tilt float64
+	Name string
+	*Layer
 }
 
 type orientation [9]float64
+
+type stamp struct {
+	layer   *Layer
+	inverse Affine
+	plane   [3]float64
+	sample  func(*Layer, float64, float64) uint8
+}
 
 type frame3 struct {
 	orientation orientation
 	position    [3]float64
 	origin      [3]float64
 	facing      float64
+	tilt        float64
 }
 
 // ===== Constants =====
@@ -30,6 +38,7 @@ const (
 	frontLimbStep          = 2.0
 	ownDepthShare          = 0.25
 	backLimbStep           = 5.0
+	depthMargin            = 3.0
 )
 
 var identityOrientation = orientation{1, 0, 0, 0, 1, 0, 0, 0, 1}
@@ -37,7 +46,11 @@ var identityOrientation = orientation{1, 0, 0, 0, 1, 0, 0, 0, 1}
 // ===== Public API =====
 
 func (p *Part) AddView(turn float64) *View {
-	view := &View{Turn: turn, Pixels: make([]uint8, p.width*p.height)}
+	return p.AddFace(turn, 0)
+}
+
+func (p *Part) AddFace(turn, tilt float64) *View {
+	view := &View{Turn: turn, Tilt: tilt, Layer: NewLayer()}
 	p.Views = append(p.Views, view)
 	return view
 }
@@ -57,8 +70,12 @@ func (p *Part) FindDrawing(name string) *View {
 }
 
 func (p *Part) FindView(turn float64) *View {
+	return p.FindFace(turn, 0)
+}
+
+func (p *Part) FindFace(turn, tilt float64) *View {
 	index := slices.IndexFunc(p.Views, func(view *View) bool {
-		return view.Name == "" && math.Abs(math.Remainder(view.Turn-turn, 360)) < 1e-6
+		return view.Name == "" && math.Abs(math.Remainder(view.Turn-turn, 360)) < 1e-6 && math.Abs(math.Remainder(view.Tilt-tilt, 360)) < 1e-6
 	})
 	if index < 0 {
 		return nil
@@ -67,31 +84,35 @@ func (p *Part) FindView(turn float64) *View {
 }
 
 func (p *Part) DeriveView(turn, sourceTurn float64, isMirrored bool, widthScale float64) *View {
-	source := p.Pixels
+	source := p.Layer
 	if found := p.FindView(sourceTurn); found != nil {
-		source = found.Pixels
+		source = found.Layer
 	}
-	derived := make([]uint8, len(source))
+	derived := NewLayer()
 	centerX := float64(p.Pivot.X) + 0.5
 	side := float64(1 - 2*boolToInt(isMirrored))
 	scale := math.Max(widthScale, 0.05)
-	for index := range derived {
-		x, y := index%p.width, index/p.width
-		sourceX := int(math.Floor(centerX + (float64(x)+0.5-centerX)*side/scale))
-		isInside := sourceX >= 0 && sourceX < p.width
-		derived[index] = source[y*p.width+min(max(sourceX, 0), p.width-1)] * uint8(boolToInt(isInside))
+	area := source.Area()
+	reachLeft := centerX + (float64(area.X)-centerX)*side*scale
+	reachRight := centerX + (float64(area.X+area.Width)-centerX)*side*scale
+	left, right := int(math.Floor(min(reachLeft, reachRight)))-1, int(math.Ceil(max(reachLeft, reachRight)))+1
+	for y := area.Y; y < area.Y+area.Height; y++ {
+		for x := left; x <= right; x++ {
+			sourceX := int(math.Floor(centerX + (float64(x)+0.5-centerX)*side/scale))
+			derived.Set(x, y, source.At(sourceX, y))
+		}
 	}
 	view := p.FindView(turn)
 	if view == nil {
 		view = p.AddView(turn)
 	}
-	view.Pixels = derived
-	view.layer = nil
+	view.Layer = derived
 	return view
 }
 
-func (v *View) Invalidate() {
-	v.layer = nil
+func ViewAxes(turn, tilt float64) [axisCount][3]float64 {
+	world := yawOrientation(turn).then(tiltOrientation(tilt))
+	return [axisCount][3]float64{AxisX: {world[0], world[3], world[6]}, AxisY: {world[1], world[4], world[7]}, AxisZ: {world[2], world[5], world[8]}}
 }
 
 func (s *Sheet) Facings(pose Pose) []float64 {
@@ -104,7 +125,7 @@ func (s *Sheet) Depths(pose Pose) []float64 {
 	return slices.Clone(s.depths)
 }
 
-func (s *Sheet) Layers(pose Pose) []*Part {
+func (s *Sheet) Layers(pose Pose) []*Layer {
 	s.resolveTransforms(pose)
 	return slices.Clone(s.layers)
 }
@@ -123,7 +144,7 @@ func (s *Sheet) parentFrame(parent int, pose Pose) frame3 {
 	s.placeOf(parent, pose)
 	part := s.Parts[parent]
 	centerX, centerY := PixelCenter(part.Pivot)
-	return frame3{s.orientations[parent], s.positions[parent], [3]float64{centerX, centerY, float64(part.Depth)}, s.facings[parent]}
+	return frame3{s.orientations[parent], s.positions[parent], [3]float64{centerX, centerY, float64(part.Depth)}, s.facings[parent], s.tilts[parent]}
 }
 
 func (s *Sheet) placePart(index int, joint Joint, parent frame3) {
@@ -135,28 +156,46 @@ func (s *Sheet) placePart(index int, joint Joint, parent frame3) {
 		float64(part.Depth) - parent.origin[2],
 	})
 	s.positions[index] = [3]float64{parent.position[0] + offset[0], parent.position[1] + offset[1], parent.position[2] + offset[2]}
-	s.orientations[index] = parent.orientation.then(yawOrientation(joint.Turn)).then(rollOrientation(joint.Angle))
+	s.orientations[index] = parent.orientation.then(yawOrientation(joint.Turn)).then(tiltOrientation(joint.Tilt)).then(rollOrientation(joint.Angle))
 	s.facings[index] = parent.facing + joint.Turn
+	s.tilts[index] = parent.tilt + joint.Tilt
 }
 
 func (s *Sheet) dressParts(pose Pose) {
 	s.carriers = slices.Grow(s.carriers[:0], len(s.Parts))[:len(s.Parts)]
-	s.childCounts = slices.Grow(s.childCounts[:0], len(s.Parts))[:len(s.Parts)]
-	clear(s.childCounts)
-	for index, part := range s.Parts {
+	s.countChildren()
+	for index := range s.Parts {
 		s.carriers[index] = index
-		s.childCounts[max(part.Parent, 0)] += boolToInt(part.Parent != NoParent)
 	}
 	for index, part := range s.Parts {
 		s.carriers[max(part.Parent, 0)] = pickIndex(s.isHanger(index), index, s.carriers[max(part.Parent, 0)])
 	}
 	for index := range s.Parts {
-		s.dressPart(index, s.facings[s.carriers[index]], jointAt(pose, index).Drawing)
+		s.dressPart(index, s.facings[s.carriers[index]], s.tilts[s.carriers[index]], jointAt(pose, index).Drawing)
 	}
 	s.ownDepths = append(s.ownDepths[:0], s.depths...)
 	for index := range s.Parts {
 		level, root := s.limbRoot(index)
 		s.depths[index] = s.ownDepths[root] + ownDepthShare*(s.ownDepths[index]-s.ownDepths[root]) + limbBias(level, s.facings[index])
+		s.depthPlanes[index] = s.depthPlane(index, [2]float64{ownDepthShare, 1}[boolToInt(root == index)])
+	}
+}
+
+func (s *Sheet) depthPlane(index int, share float64) [3]float64 {
+	part := s.Parts[index]
+	boneX, boneY := float64(part.Tip.X-part.Pivot.X), float64(part.Tip.Y-part.Pivot.Y)
+	pivotX, pivotY := PixelCenter(part.Pivot)
+	slope := share * 2 * s.depthReaches[index] / max(boneX*boneX+boneY*boneY, 1)
+	alongX, alongY := slope*boneX, slope*boneY
+	middle := s.depths[index] - share*s.depthReaches[index]
+	return [3]float64{middle - alongX*pivotX - alongY*pivotY, alongX, alongY}
+}
+
+func (s *Sheet) countChildren() {
+	s.childCounts = slices.Grow(s.childCounts[:0], len(s.Parts))[:len(s.Parts)]
+	clear(s.childCounts)
+	for _, part := range s.Parts {
+		s.childCounts[max(part.Parent, 0)] += boolToInt(part.Parent != NoParent)
 	}
 }
 
@@ -187,20 +226,33 @@ func limbBias(level int, facing float64) float64 {
 	return -float64(level) * step * toward
 }
 
-func (s *Sheet) dressPart(index int, viewFacing float64, drawing string) {
+func (s *Sheet) dressPart(index int, viewFacing, viewTilt float64, drawing string) {
 	part := s.Parts[index]
 	centerX, centerY := PixelCenter(part.Pivot)
-	layer, viewTurn := part.layerFor(viewFacing, drawing)
-	s.layers[index] = layer
-	isMirrored := math.Cos((viewFacing-viewTurn)*math.Pi/180) < 0
-	linear, depthReach := cardLinear(part, s.orientations[index], isMirrored)
+	view := part.viewFor(viewFacing, viewTilt, drawing)
+	s.layers[index] = view.Layer
+	linear, depthReach := s.cardOf(index, viewFacing, view)
 	position := s.positions[index]
 	s.depths[index] = position[2] + depthReach
+	s.depthReaches[index] = depthReach
 	s.transforms[index] = Affine{
 		linear[0], linear[1], linear[2], linear[3],
 		position[0] - linear[0]*centerX - linear[2]*centerY,
 		position[1] - linear[1]*centerX - linear[3]*centerY,
 	}
+}
+
+func (s *Sheet) cardOf(index int, viewFacing float64, view View) ([4]float64, float64) {
+	if view.Tilt != 0 {
+		return faceLinear(s.orientations[index], view.Tilt), 0
+	}
+	isMirrored := math.Cos((viewFacing-view.Turn)*math.Pi/180) < 0
+	return cardLinear(s.Parts[index], s.orientations[index], isMirrored)
+}
+
+func faceLinear(turned orientation, tilt float64) [4]float64 {
+	presented := turned.then(tiltOrientation(-tilt))
+	return [4]float64{presented[0], presented[3], presented[1], presented[4]}
 }
 
 func cardLinear(part *Part, turned orientation, isMirrored bool) ([4]float64, float64) {
@@ -241,27 +293,27 @@ func foreshorten(world [3]float64, turned orientation, alongX, alongY, length fl
 	return projectedX * shortest / projected, projectedY * shortest / projected
 }
 
-func (p *Part) layerFor(facing float64, drawing string) (*Part, float64) {
+func (p *Part) viewFor(facing, tilt float64, drawing string) View {
 	if chosen := p.FindDrawing(drawing); chosen != nil {
-		return chosen.layerOf(p), chosen.Turn
+		return *chosen
 	}
-	layer, turn := p, 0.0
-	nearest := math.Abs(math.Remainder(facing, 360))
+	best := View{Layer: p.Layer}
+	bestScore := facingScore(facing, tilt, best)
 	for _, view := range p.Views {
-		distance := math.Abs(math.Remainder(facing-view.Turn, 360))
-		if view.Name != "" || distance >= nearest {
+		score := facingScore(facing, tilt, *view)
+		if view.Name != "" || score <= bestScore {
 			continue
 		}
-		layer, turn, nearest = view.layerOf(p), view.Turn, distance
+		best, bestScore = *view, score
 	}
-	return layer, turn
+	return best
 }
 
-func (v *View) layerOf(part *Part) *Part {
-	if v.layer == nil {
-		v.layer = &Part{Name: part.Name, Pixels: v.Pixels, width: part.width, height: part.height, isStale: true}
-	}
-	return v.layer
+func facingScore(facing, tilt float64, view View) float64 {
+	yaw := math.Cos(math.Abs(math.Remainder(facing-view.Turn, 360)) * math.Pi / 180)
+	tiltSine, tiltCosine := math.Sincos(tilt * math.Pi / 180)
+	viewSine, viewCosine := math.Sincos(view.Tilt * math.Pi / 180)
+	return tiltCosine*viewCosine*yaw + tiltSine*viewSine
 }
 
 func (s *Sheet) sortByDepth() {
@@ -285,16 +337,14 @@ func compareFloats(first, second float64) int {
 	return boolToInt(first > second) - boolToInt(first < second)
 }
 
-func (p *Part) eachView(change func(view *View)) {
-	for _, view := range p.Views {
-		change(view)
-		view.layer = nil
-	}
-}
-
 func yawOrientation(degrees float64) orientation {
 	sine, cosine := math.Sincos(degrees * math.Pi / 180)
 	return orientation{cosine, 0, -sine, 0, 1, 0, sine, 0, cosine}
+}
+
+func tiltOrientation(degrees float64) orientation {
+	sine, cosine := math.Sincos(degrees * math.Pi / 180)
+	return orientation{1, 0, 0, 0, cosine, -sine, 0, sine, cosine}
 }
 
 func rollOrientation(degrees float64) orientation {

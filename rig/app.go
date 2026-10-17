@@ -125,9 +125,13 @@ func (a *App) Run() error {
 	ebiten.SetWindowTitle(a.Config.Title)
 	ebiten.SetWindowResizingMode(ebiten.WindowResizingModeEnabled)
 	ebiten.SetWindowClosingHandled(true)
+	a.Start()
+	return ebiten.RunGame(a)
+}
+
+func (a *App) Start() {
 	ebiten.SetTPS(a.Config.TicksPerSecond)
 	a.Switch(a.Config.StartScreen)
-	return ebiten.RunGame(a)
 }
 
 func (a *App) SetScreen(name string, screen Screen) {

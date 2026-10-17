@@ -1,4 +1,4 @@
-package editor
+package spriteeditor
 
 import (
 	"bytes"
@@ -7,7 +7,11 @@ import (
 	"math"
 	"os"
 	"path/filepath"
+	"slices"
+	"strings"
 	"testing"
+
+	"github.com/hajimehoshi/ebiten/v2"
 
 	"ajkurig/sprite"
 )
@@ -178,6 +182,7 @@ func TestMirrorTwinSwingsTheOtherLeg(t *testing.T) {
 	editor := newMouseEditor(t)
 	showMode(t, editor, ModeAnimate)
 	editor.selectAnimation(0)
+	editor.link = LinkMirror
 	editor.selectOnly(editor.sheet.FindPart("leg_front_thigh"))
 	back := editor.sheet.FindPart("leg_back_thigh")
 	before := editor.sheet.FramePose(editor.currentAnimation(), 0)[back].Angle
@@ -211,9 +216,7 @@ func wheel(t *testing.T, editor *Editor, x, y, amount float32, step string) {
 func paintedPixels(editor *Editor) int {
 	count := 0
 	for _, part := range editor.sheet.Parts {
-		for _, value := range part.Pixels {
-			count += int(min(value, 1))
-		}
+		count += countPainted(part)
 	}
 	return count
 }
@@ -648,6 +651,144 @@ func TestOpeningAnotherSpriteAndCreatingOne(t *testing.T) {
 	}
 }
 
+func newEditorWithUnsavedChange(t *testing.T) (*Editor, string, string) {
+	t.Helper()
+	editor := newMouseEditor(t)
+	editor.save()
+	first := editor.path
+	other := filepath.Join(filepath.Dir(first), "punk.spr")
+	if err := os.WriteFile(other, []byte(sprite.Write(sprite.NewHumanoid("punk", 64, 64))), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	editor.selectOnly(editor.sheet.FindPart("head"))
+	editor.record()
+	editor.sheet.Animations[0].Name = "renamed"
+	editor.selection = pixelSelection{isFloating: true}
+	return editor, first, other
+}
+
+func fileContent(t *testing.T, path string) string {
+	t.Helper()
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return string(data)
+}
+
+func TestSwitchingWithChangesAsksAndTouchesNothing(t *testing.T) {
+	editor, first, other := newEditorWithUnsavedChange(t)
+	before := fileContent(t, first)
+	editor.openSprite(other)
+	mustUpdate(t, editor, "question")
+	if editor.dialog != DialogUnsaved || editor.path != first {
+		t.Fatalf("opening another sprite with changes should ask first, got dialog %d on %s", editor.dialog, editor.path)
+	}
+	if fileContent(t, first) != before {
+		t.Fatal("asking must not write the file")
+	}
+}
+
+func TestDiscardOpensTheOtherSpriteAndLeavesTheFirstFile(t *testing.T) {
+	editor, first, other := newEditorWithUnsavedChange(t)
+	before := fileContent(t, first)
+	editor.openSprite(other)
+	mustUpdate(t, editor, "question")
+	clickButton(t, editor, "unsaved.discard")
+	mustUpdate(t, editor, "discarded")
+	if !samePath(editor.path, other) || editor.dialog != DialogNone {
+		t.Fatalf("DISCARD should open %s, got %s", other, editor.path)
+	}
+	if fileContent(t, first) != before {
+		t.Fatal("DISCARD must leave the first file as it was on disk")
+	}
+	if len(editor.history) != 0 || len(editor.future) != 0 || slices.Index(editor.selected, true) != editor.partIndex || slices.Index(editor.selected[editor.partIndex+1:], true) >= 0 || editor.selection.isFloating {
+		t.Fatalf("a switch should clear the history and the selection, got %d %d %v %v", len(editor.history), len(editor.future), editor.selected, editor.selection.isFloating)
+	}
+}
+
+func TestSaveWritesThenOpens(t *testing.T) {
+	editor, first, other := newEditorWithUnsavedChange(t)
+	before := fileContent(t, first)
+	editor.openSprite(other)
+	mustUpdate(t, editor, "question")
+	clickButton(t, editor, "unsaved.save")
+	mustUpdate(t, editor, "saved")
+	if !samePath(editor.path, other) || editor.dialog != DialogNone {
+		t.Fatalf("SAVE should open %s after writing, got %s", other, editor.path)
+	}
+	if fileContent(t, first) == before {
+		t.Fatal("SAVE should write the changes to the first file")
+	}
+}
+
+func TestCancelKeepsEverything(t *testing.T) {
+	editor, first, other := newEditorWithUnsavedChange(t)
+	before := fileContent(t, first)
+	historyLength := len(editor.history)
+	editor.openSprite(other)
+	mustUpdate(t, editor, "question")
+	clickButton(t, editor, "unsaved.cancel")
+	mustUpdate(t, editor, "cancelled")
+	if editor.path != first || editor.dialog != DialogNone || !editor.isDirty || len(editor.history) != historyLength {
+		t.Fatal("CANCEL should keep the sprite, its changes and its history")
+	}
+	if fileContent(t, first) != before {
+		t.Fatal("CANCEL must not write the file")
+	}
+}
+
+func TestSwitchingWithoutChangesOpensAtOnce(t *testing.T) {
+	editor := newMouseEditor(t)
+	editor.save()
+	other := filepath.Join(filepath.Dir(editor.path), "punk.spr")
+	if err := os.WriteFile(other, []byte(sprite.Write(sprite.NewHumanoid("punk", 64, 64))), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	editor.openSprite(other)
+	if !samePath(editor.path, other) || editor.dialog != DialogNone {
+		t.Fatal("a sprite without changes should switch without a question")
+	}
+}
+
+func TestProjectBrowserListsSpritesInEveryFolder(t *testing.T) {
+	root := t.TempDir()
+	files := map[string]string{
+		"sprites/hero.spr":         sprite.Write(sprite.NewHumanoid("hero", 64, 64)),
+		"sprites/enemies/punk.spr": sprite.Write(sprite.NewHumanoid("punk", 64, 64)),
+		"props/crate.spr":          sprite.Write(sprite.NewHumanoid("crate", 64, 64)),
+		"sprites/notes.txt":        "not a sprite",
+		"sprites/hero.spr.bak":     "not a sprite",
+		".git/stale.spr":           "hidden folder",
+	}
+	for name, content := range files {
+		path := filepath.Join(root, filepath.FromSlash(name))
+		if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	editor := New(filepath.Join(root, "sprites", "hero.spr"), 64, 64)
+	editor.SetProjectRoot(root)
+	var names []string
+	for _, path := range editor.spriteFiles() {
+		names = append(names, editor.projectName(path))
+	}
+	wanted := []string{"props/crate", "sprites/enemies/punk", "sprites/hero"}
+	if !slices.Equal(names, wanted) {
+		t.Fatalf("the browser should list every sprite of the project and nothing else, got %v", names)
+	}
+}
+
+func TestProjectRootDefaultsToTheSpriteFolder(t *testing.T) {
+	editor := newTestEditor(t)
+	if !samePath(editor.projectRoot, filepath.Dir(editor.path)) {
+		t.Fatalf("the project root should default to %s, got %s", filepath.Dir(editor.path), editor.projectRoot)
+	}
+}
+
 func TestImportingAMoveFromAnotherSprite(t *testing.T) {
 	editor := newMouseEditor(t)
 	source := sprite.NewHumanoid("mannequin", 64, 64)
@@ -689,24 +830,93 @@ func TestCopyingTheReferenceIntoTheParts(t *testing.T) {
 	}
 }
 
-func TestTurnButtonsTurnTheSelectedPart(t *testing.T) {
-	editor := newTestEditor(t)
-	editor.setMode(ModePoses)
-	hips := editor.sheet.FindPart("hips")
-	editor.selectPart(hips)
-	editor.turnSelected(45)
-	editor.turnSelected(15)
-	mustUpdate(t, editor, "turning")
-	if editor.workPose[hips].Turn != 60 {
-		t.Fatalf("two turns add up, got %v", editor.workPose[hips].Turn)
+func newRotationEditor(t *testing.T, part string) (*Editor, int) {
+	t.Helper()
+	editor := newMouseEditor(t)
+	showMode(t, editor, ModePoses)
+	index := editor.sheet.FindPart(part)
+	editor.selectOnly(index)
+	mustUpdate(t, editor, "part chosen")
+	return editor, index
+}
+
+func TestEachRotationButtonTurnsOnlyItsAxisByOneDegree(t *testing.T) {
+	editor, head := newRotationEditor(t, "head")
+	for axis, id := range []string{"rot.x", "rot.y", "rot.z"} {
+		before := jointAtOrZero(editor.workPose, head)
+		clickButton(t, editor, id+".plus")
+		mustUpdate(t, editor, "plus")
+		wanted := before
+		*wanted.Rotation(sprite.Axis(axis)) += 1
+		if jointAtOrZero(editor.workPose, head) != wanted {
+			t.Fatalf("%s.plus should add one degree on its axis only, got %+v", id, jointAtOrZero(editor.workPose, head))
+		}
+		clickButton(t, editor, id+".minus")
+		mustUpdate(t, editor, "minus")
+		if jointAtOrZero(editor.workPose, head) != before {
+			t.Fatalf("%s.minus should take the degree back, got %+v", id, jointAtOrZero(editor.workPose, head))
+		}
 	}
-	editor.nudge(10, 0, 0)
-	if editor.workPose[hips].Turn != 60 {
-		t.Fatal("rolling a bone keeps its turn")
+}
+
+func TestRotationButtonsMoveOnlyTheChosenBone(t *testing.T) {
+	editor, thigh := newRotationEditor(t, "leg_front_thigh")
+	editor.link = LinkMirror
+	twin := editor.sheet.FindPart("leg_back_thigh")
+	before := jointAtOrZero(editor.workPose, twin)
+	clickButton(t, editor, "rot.z.minus")
+	mustUpdate(t, editor, "thigh forward")
+	if jointAtOrZero(editor.workPose, thigh).Angle != -1 || jointAtOrZero(editor.workPose, twin) != before {
+		t.Fatal("the rotation panel should move the chosen bone only, never its twin")
 	}
-	editor.straightenSelected()
-	if editor.workPose[hips].Turn != 0 {
-		t.Fatal("STRAIGHT cancels the turn")
+}
+
+func TestRotationStaysWithinTheJointLimits(t *testing.T) {
+	editor, knee := newRotationEditor(t, "leg_front_shin")
+	clickButton(t, editor, "rot.z.minus")
+	mustUpdate(t, editor, "bending the knee backwards")
+	if editor.workPose[knee].Angle != 0 {
+		t.Fatalf("a knee should not bend backwards, got %v", editor.workPose[knee].Angle)
+	}
+	editor.typeRotation(sprite.AxisZ, "500")
+	if editor.workPose[knee].Angle != 160 {
+		t.Fatalf("a typed angle should stop at the limit, got %v", editor.workPose[knee].Angle)
+	}
+	editor.typeRotation(sprite.AxisX, "30")
+	if editor.workPose[knee].Tilt != 0 {
+		t.Fatalf("a knee is a hinge, its tilt should stay 0, got %v", editor.workPose[knee].Tilt)
+	}
+	editor.typeRotation(sprite.AxisZ, "ninety")
+	if editor.workPose[knee].Angle != 160 {
+		t.Fatal("a value that is not a number should change nothing")
+	}
+}
+
+func TestRotationPanelPosesTheFrameInAnimate(t *testing.T) {
+	editor := newMouseEditor(t)
+	showMode(t, editor, ModeAnimate)
+	head := editor.sheet.FindPart("head")
+	editor.selectOnly(head)
+	editor.selectFrame(0)
+	mustUpdate(t, editor, "first frame")
+	before := editor.currentFrame().Pose[head].Tilt
+	clickButton(t, editor, "rot.x.plus")
+	mustUpdate(t, editor, "tilting the head")
+	if editor.currentFrame().Pose[head].Tilt != before+1 || len(editor.history) == 0 {
+		t.Fatal("in ANIMATE the panel should tilt the frame's head and be undoable")
+	}
+}
+
+func TestAnatomyButtonsGiveTheSkeletonItsLimits(t *testing.T) {
+	editor := newMouseEditor(t)
+	thigh := editor.sheet.Parts[editor.sheet.FindPart("leg_back_thigh")]
+	thigh.Limits, thigh.LimitedAxes = sprite.JointLimits{}, 0
+	showMode(t, editor, ModeSkeleton)
+	clickButton(t, editor, "anatomy.human")
+	mustUpdate(t, editor, "human anatomy")
+	wanted, _ := sprite.HumanAnatomy.LimitsOf("leg_back_thigh")
+	if thigh.Limit(sprite.AxisZ, 90) != 90 || thigh.Limits != wanted || !editor.isDirty {
+		t.Fatalf("HUMAN should give the back thigh its full split, got %v", thigh.Limits)
 	}
 }
 
@@ -723,18 +933,453 @@ func TestNewViewTakesThePaintOfThatSide(t *testing.T) {
 	if view == nil {
 		t.Fatal("NEW VIEW HERE adds a view for the side shown")
 	}
-	if editor.paintLayer() == editor.currentPart() {
+	if editor.paintLayer() == editor.currentPart().Layer {
 		t.Fatal("the pencil paints the new view")
 	}
 	pivot := editor.currentPart().Pivot
 	x, y := editor.transforms[torso].Apply(sprite.PixelCenter(pivot))
 	editor.colorIndex = 3
 	editor.paintPixel(int(x), int(y), editor.paintValue())
-	if view.Pixels[pivot.Y*editor.sheet.Width+pivot.X] != 3 {
+	if view.At(pivot.X, pivot.Y) != 3 {
 		t.Fatal("painting while turned lands in the view")
 	}
 	editor.deleteViewHere()
 	if editor.sheet.Parts[torso].FindView(180) != nil {
 		t.Fatal("DELETE VIEW removes it")
+	}
+}
+
+func paintAround(t *testing.T, editor *Editor, part int) {
+	t.Helper()
+	target := editor.sheet.Parts[part]
+	for y := -2; y <= 2; y++ {
+		for x := -2; x <= 2; x++ {
+			target.Set(target.Pivot.X+x, target.Pivot.Y+y, 1)
+		}
+	}
+	target.Invalidate()
+	mustUpdate(t, editor, "painting "+target.Name)
+}
+
+func pixelOf(editor *Editor, part int) (int, int) {
+	pixels := make([]uint8, editor.sheet.Width*editor.sheet.Height)
+	editor.sheet.RenderSelection(editor.pose, func(index int) bool { return index == part }, pixels)
+	for offset, value := range pixels {
+		x, y := offset%editor.sheet.Width, offset/editor.sheet.Width
+		if value != sprite.Transparent && editor.partUnderPixel(x, y) == part {
+			return x, y
+		}
+	}
+	return -1, -1
+}
+
+func TestRightClickErasesThePartUnderTheCursor(t *testing.T) {
+	editor := newMouseEditor(t)
+	showMode(t, editor, ModeDraw)
+	editor.selectTool(ToolPencil)
+	editor.selectOnly(editor.sheet.FindPart("leg_back_thigh"))
+	mustUpdate(t, editor, "pencil on the thigh")
+	head := editor.sheet.FindPart("head")
+	paintAround(t, editor, head)
+	x, y := pixelOf(editor, head)
+	screenX, screenY := editor.toScreen([2]float64{float64(x) + 0.5, float64(y) + 0.5})
+	editor.ui.Simulated.X, editor.ui.Simulated.Y, editor.ui.Simulated.IsRightDown = screenX, screenY, true
+	mustUpdate(t, editor, "right press on the head")
+	editor.ui.Simulated.IsRightDown = false
+	mustUpdate(t, editor, "right release")
+	if editor.partIndex != head || editor.partUnderPixel(x, y) == head {
+		t.Fatalf("a right click on the head should erase the head pixel, selected %s", editor.currentPart().Name)
+	}
+}
+
+func TestPressingTheDrawnLimbGrabsIt(t *testing.T) {
+	editor := newMouseEditor(t)
+	showMode(t, editor, ModeAnimate)
+	editor.selectOnly(editor.sheet.FindPart("head"))
+	mustUpdate(t, editor, "head selected")
+	torso := editor.sheet.FindPart("torso")
+	target := editor.sheet.Parts[torso]
+	for y := -1; y <= 1; y++ {
+		target.Set(target.Pivot.X+6, target.Pivot.Y-6+y, 1)
+	}
+	target.Invalidate()
+	mustUpdate(t, editor, "painting beside the spine")
+	x, y := pixelOf(editor, torso)
+	screenX, screenY := editor.toScreen([2]float64{float64(x) + 0.5, float64(y) + 0.5})
+	press(t, editor, screenX, screenY, "pressing the torso drawing")
+	release(t, editor, "release")
+	if editor.partIndex != torso {
+		t.Fatalf("pressing the torso drawing should grab the torso, got %s", editor.currentPart().Name)
+	}
+}
+
+func TestSelectToolMovesAndErasesPixels(t *testing.T) {
+	editor := newMouseEditor(t)
+	showMode(t, editor, ModeDraw)
+	editor.selectTool(ToolSelect)
+	mustUpdate(t, editor, "select tool")
+	head := editor.sheet.FindPart("head")
+	paintAround(t, editor, head)
+	x, y := pixelOf(editor, head)
+	before := editor.sheet.Parts[head].At(x, y)
+	fromX, fromY := editor.toScreen([2]float64{float64(x) + 0.5, float64(y) + 0.5})
+	toX, toY := editor.toScreen([2]float64{float64(x) + 1.5, float64(y) + 1.5})
+	press(t, editor, fromX, fromY, "box start")
+	press(t, editor, toX, toY, "box end")
+	release(t, editor, "box done")
+	if !editor.selection.isFloating || editor.partIndex != head {
+		t.Fatalf("a box on the head should take its pixels, part %s", editor.currentPart().Name)
+	}
+	press(t, editor, fromX, fromY, "grab the box")
+	movedX, movedY := editor.toScreen([2]float64{float64(x) + 3.5, float64(y) + 0.5})
+	press(t, editor, movedX, movedY, "move the box")
+	release(t, editor, "drop the box")
+	if editor.sheet.Parts[head].At(x+3, y) != before {
+		t.Fatal("the pixel should now sit 3 pixels to the right")
+	}
+	editor.deleteSelection()
+	if painted := countPainted(editor.sheet.Parts[head]); painted != 21 {
+		t.Fatalf("Delete should leave the 21 pixels outside the 2x2 box, got %d", painted)
+	}
+	editor.undo()
+	if editor.sheet.FindPart("head") < 0 {
+		t.Fatal("undo should keep the sprite whole")
+	}
+}
+
+func countPainted(part *sprite.Part) int {
+	count := 0
+	part.Each(func(int, int, uint8) { count++ })
+	return count
+}
+
+func newRestPencilEditor(t *testing.T, tool Tool) *Editor {
+	t.Helper()
+	editor := newMouseEditor(t)
+	editor.tool = tool
+	editor.isRestView = true
+	editor.partIndex = editor.sheet.FindPart("torso")
+	editor.zoomAtCenter(-3)
+	mustUpdate(t, editor, "rest view zoomed out")
+	return editor
+}
+
+func TestWorkAreaFillsTheWholeView(t *testing.T) {
+	editor := newRestPencilEditor(t, ToolPencil)
+	work := editor.workRect()
+	isCovering := work.X <= viewRect.X && work.Y <= viewRect.Y && work.X+work.W >= viewRect.X+viewRect.W && work.Y+work.H >= viewRect.Y+viewRect.H
+	if !isCovering {
+		t.Fatalf("the work area %+v should cover the whole view %+v", work, viewRect)
+	}
+}
+
+func TestPencilPaintsOutsideTheCanvas(t *testing.T) {
+	editor := newRestPencilEditor(t, ToolPencil)
+	x, y := editor.toScreen([2]float64{-2.5, 10.5})
+	if !viewRect.Contains(x, y) {
+		t.Fatalf("the test point %v,%v should be on screen", x, y)
+	}
+	click(t, editor, x, y, "painting left of the canvas")
+	if editor.currentPart().At(-3, 10) == sprite.Transparent {
+		t.Fatal("the pencil should paint left of the old canvas")
+	}
+	work := editor.workArea
+	if editor.composed[(10-work.Y)*work.Width-3-work.X] == sprite.Transparent {
+		t.Fatal("a pixel left of the old canvas should be shown")
+	}
+}
+
+func TestFillOnEmptySpaceStopsAtTheView(t *testing.T) {
+	editor := newRestPencilEditor(t, ToolFill)
+	editor.clearAllPaint()
+	x, y := editor.toScreen([2]float64{-2.5, 10.5})
+	click(t, editor, x, y, "filling empty space")
+	painted, work := countPainted(editor.currentPart()), editor.workArea
+	if painted == 0 || painted > work.Width*work.Height {
+		t.Fatalf("a fill on empty space should stop at the visible area, painted %d", painted)
+	}
+}
+
+func newReachEditor(t *testing.T) *Editor {
+	t.Helper()
+	editor := newMouseEditor(t)
+	showMode(t, editor, ModePoses)
+	return editor
+}
+
+func limbEndOf(editor *Editor, name string) [2]float64 {
+	return editor.boneEnds[editor.sheet.FindPart(name)][1]
+}
+
+func pinPart(t *testing.T, editor *Editor, name string) {
+	t.Helper()
+	editor.selectOnly(editor.sheet.FindPart(name))
+	mustUpdate(t, editor, "choosing "+name)
+	clickButton(t, editor, "pin.toggle")
+}
+
+func TestTwinsAreOffByDefault(t *testing.T) {
+	if editor := newTestEditor(t); editor.link != LinkOff {
+		t.Fatalf("a new editor should move one bone at a time, link is %v", editor.link)
+	}
+}
+
+func TestDraggingAFootMovesOnlyThatLeg(t *testing.T) {
+	editor := newReachEditor(t)
+	shin, thigh := editor.sheet.FindPart("leg_front_shin"), editor.sheet.FindPart("leg_front_thigh")
+	before := slices.Clone(editor.pose)
+	foot := limbEndOf(editor, "leg_front_shin")
+	target := [2]float64{foot[0] + 4, foot[1] - 6}
+	pressCanvas(t, editor, foot, "grabbing the foot")
+	pressCanvas(t, editor, target, "lifting the foot")
+	release(t, editor, "letting go")
+	mustUpdate(t, editor, "showing the pose")
+	if distance := math.Hypot(limbEndOf(editor, "leg_front_shin")[0]-target[0], limbEndOf(editor, "leg_front_shin")[1]-target[1]); distance > 0.6 {
+		t.Fatalf("the foot should follow the mouse, %v pixels away", distance)
+	}
+	for index := range editor.pose {
+		if index != shin && index != thigh && editor.pose[index] != before[index] {
+			t.Fatalf("only the dragged leg should move, %s moved", editor.sheet.Parts[index].Name)
+		}
+	}
+}
+
+func TestAPinnedFootStaysOnItsPixel(t *testing.T) {
+	editor := newReachEditor(t)
+	pinPart(t, editor, "leg_back_shin")
+	pinned, free := limbEndOf(editor, "leg_back_shin"), limbEndOf(editor, "leg_front_shin")
+	editor.selectOnly(editor.sheet.FindPart("hips"))
+	editor.nudge(0, 0, 3)
+	mustUpdate(t, editor, "lowering the hips")
+	held, moved := limbEndOf(editor, "leg_back_shin"), limbEndOf(editor, "leg_front_shin")
+	if math.Hypot(held[0]-pinned[0], held[1]-pinned[1]) > 0.6 {
+		t.Fatalf("the pinned foot should stay on its pixel, %v -> %v", pinned, held)
+	}
+	if moved[1]-free[1] != 3 {
+		t.Fatalf("the free foot should go down with the hips, %v -> %v", free, moved)
+	}
+}
+
+func TestAPinnedPelvisStaysInPlace(t *testing.T) {
+	editor := newReachEditor(t)
+	pinPart(t, editor, "hips")
+	hips := editor.sheet.FindPart("hips")
+	before := editor.boneEnds[hips][0]
+	editor.nudge(0, 2, 1)
+	mustUpdate(t, editor, "pushing the hips")
+	if editor.boneEnds[hips][0] != before {
+		t.Fatalf("pinned hips should not move, %v -> %v", before, editor.boneEnds[hips][0])
+	}
+}
+
+func TestDraggingAPinnedFootMovesItsPin(t *testing.T) {
+	editor := newReachEditor(t)
+	pinPart(t, editor, "leg_front_shin")
+	foot := limbEndOf(editor, "leg_front_shin")
+	target := [2]float64{foot[0] - 3, foot[1] - 5}
+	pressCanvas(t, editor, foot, "grabbing the pinned foot")
+	pressCanvas(t, editor, target, "moving it")
+	release(t, editor, "letting go")
+	editor.selectOnly(editor.sheet.FindPart("leg_front_thigh"))
+	editor.rotateBy(sprite.AxisZ, 10)
+	mustUpdate(t, editor, "turning the thigh")
+	held := limbEndOf(editor, "leg_front_shin")
+	if math.Hypot(held[0]-target[0], held[1]-target[1]) > 0.6 {
+		t.Fatalf("the pin should follow the dragged foot and hold it there, %v vs %v", held, target)
+	}
+}
+
+func TestOnlyHandsFeetAndHipsTakeAPin(t *testing.T) {
+	editor := newReachEditor(t)
+	pinPart(t, editor, "torso")
+	if len(editor.pins) != 0 {
+		t.Fatal("the torso is not the end of a limb nor the root, it should not take a pin")
+	}
+	pinPart(t, editor, "arm_front_fore")
+	clickButton(t, editor, "pin.toggle")
+	if len(editor.pins) != 0 {
+		t.Fatal("a second click should take the pin away")
+	}
+}
+
+func pressCanvas(t *testing.T, editor *Editor, point [2]float64, step string) {
+	t.Helper()
+	x, y := editor.toScreen(point)
+	press(t, editor, x, y, step)
+}
+
+func newFaceEditor(t *testing.T) (*Editor, *sprite.Part) {
+	t.Helper()
+	editor := newMouseEditor(t)
+	showMode(t, editor, ModeDraw)
+	editor.selectPart(editor.sheet.FindPart("torso"))
+	editor.tool = ToolPencil
+	mustUpdate(t, editor, "torso chosen")
+	return editor, editor.currentPart()
+}
+
+func paintTorsoPivot(t *testing.T, editor *Editor) {
+	t.Helper()
+	pivot := editor.currentPart().Pivot
+	x, y := editor.transforms[editor.partIndex].Apply(sprite.PixelCenter(pivot))
+	editor.colorIndex = 3
+	pressCanvas(t, editor, [2]float64{x, y}, "painting the face")
+	release(t, editor, "letting go")
+}
+
+func TestPaintingOnAFaceStoresItOnThatFaceOnly(t *testing.T) {
+	editor, torso := newFaceEditor(t)
+	front := torso.Layer.Clone()
+	clickButton(t, editor, "face.back")
+	paintTorsoPivot(t, editor)
+	back := torso.FindView(180)
+	if back == nil || back.At(torso.Pivot.X, torso.Pivot.Y) != 3 {
+		t.Fatal("painting the BACK face should give the torso its own back drawing with the paint")
+	}
+	if !slices.Equal(pixelList(torso.Layer), pixelList(front)) {
+		t.Fatal("painting the back should leave the front drawing untouched")
+	}
+}
+
+func TestFaceButtonsTurnTheWorldToPresentTheFace(t *testing.T) {
+	editor, torso := newFaceEditor(t)
+	for id, wanted := range map[string][2]float64{"face.right": {90, 0}, "face.left": {-90, 0}, "face.top": {0, 90}, "face.bottom": {0, -90}, "face.front": {0, 0}} {
+		clickButton(t, editor, id)
+		if editor.drawTurn != wanted[0] || editor.drawTilt != wanted[1] {
+			t.Fatalf("%s should turn the world to %v, got %v %v", id, wanted, editor.drawTurn, editor.drawTilt)
+		}
+	}
+	clickButton(t, editor, "face.top")
+	paintTorsoPivot(t, editor)
+	top := torso.FindFace(0, 90)
+	if top == nil || top.At(torso.Pivot.X, torso.Pivot.Y) != 3 || editor.layers[editor.partIndex] != top.Layer {
+		t.Fatal("seen from the top, the torso should show and take paint on its top face")
+	}
+}
+
+func pixelList(layer *sprite.Layer) [][3]int {
+	pixels := [][3]int{}
+	layer.Each(func(x, y int, value uint8) { pixels = append(pixels, [3]int{x, y, int(value)}) })
+	return pixels
+}
+
+func TestSolidSwitchMarksThePartAndUndoes(t *testing.T) {
+	editor, torso := newFaceEditor(t)
+	clickButton(t, editor, "part.solid")
+	if !torso.IsSolid || !editor.isDirty {
+		t.Fatal("SOLID should mark the torso as a volume")
+	}
+	editor.undo()
+	mustUpdate(t, editor, "undo")
+	if editor.currentPart().IsSolid {
+		t.Fatal("UNDO should make the torso flat again")
+	}
+}
+
+func TestPaintingAFaceOfASolidPartShowsAtOnce(t *testing.T) {
+	editor, torso := newFaceEditor(t)
+	clickButton(t, editor, "part.solid")
+	paintTorsoPivot(t, editor)
+	mustUpdate(t, editor, "showing the paint")
+	x, y := editor.transforms[editor.partIndex].Apply(sprite.PixelCenter(torso.Pivot))
+	if got := editor.renderedPixel(int(x), int(y), func(int) bool { return true }); got != 3 {
+		t.Fatalf("the painted pixel should show on the solid torso, got %d", got)
+	}
+}
+
+func TestPreviewSpinsTheChosenSolidPart(t *testing.T) {
+	editor, torso := newFaceEditor(t)
+	clickButton(t, editor, "part.solid")
+	first := editor.previewPose()
+	editor.previewTick += 10
+	second := editor.previewPose()
+	index := editor.sheet.FindPart(torso.Name)
+	if second[index].Turn == first[index].Turn || second[editor.sheet.FindPart("head")] != (sprite.Joint{}) {
+		t.Fatal("in DRAW the preview should spin the chosen solid part alone")
+	}
+}
+
+func expectQuit(t *testing.T, editor *Editor, isQuitting bool, step string) {
+	t.Helper()
+	err := editor.Update()
+	if (err == ebiten.Termination) != isQuitting {
+		t.Fatalf("after %s the editor should quit: %v, got %v", step, isQuitting, err)
+	}
+}
+
+func pressButton(t *testing.T, editor *Editor, id string) {
+	t.Helper()
+	rect := editor.ui.Placed[id]
+	press(t, editor, rect.X+rect.W/2, rect.Y+rect.H/2, "pressing "+id)
+	editor.ui.Simulated.IsDown = false
+}
+
+func TestClosingWithoutChangesQuitsAtOnce(t *testing.T) {
+	editor := newTestEditor(t)
+	editor.save()
+	editor.RequestClose()
+	expectQuit(t, editor, true, "closing a saved sprite")
+}
+
+func TestClosingWithChangesAsksFirst(t *testing.T) {
+	editor, first, _ := newEditorWithUnsavedChange(t)
+	before := fileContent(t, first)
+	editor.RequestClose()
+	expectQuit(t, editor, false, "closing with changes")
+	if editor.dialog != DialogUnsaved {
+		t.Fatal("closing with changes should ask SAVE, DISCARD or CANCEL")
+	}
+	clickButton(t, editor, "unsaved.cancel")
+	expectQuit(t, editor, false, "CANCEL")
+	if !editor.isDirty || editor.dialog != DialogNone {
+		t.Fatal("CANCEL should keep the editor open with its changes")
+	}
+	editor.RequestClose()
+	mustUpdate(t, editor, "asking again")
+	pressButton(t, editor, "unsaved.discard")
+	expectQuit(t, editor, true, "DISCARD")
+	if fileContent(t, first) != before {
+		t.Fatal("DISCARD must leave the file as it was on disk")
+	}
+}
+
+func TestSaveThenCloseWritesTheFile(t *testing.T) {
+	editor, first, _ := newEditorWithUnsavedChange(t)
+	editor.RequestClose()
+	mustUpdate(t, editor, "question")
+	pressButton(t, editor, "unsaved.save")
+	expectQuit(t, editor, true, "SAVE")
+	if !strings.Contains(fileContent(t, first), "renamed") {
+		t.Fatal("SAVE should write the changes before closing")
+	}
+}
+
+func paintOutsideTheCanvas(t *testing.T, editor *Editor) {
+	t.Helper()
+	torso := editor.sheet.Parts[editor.sheet.FindPart("torso")]
+	torso.Set(-3, torso.Pivot.Y, 1)
+	mustUpdate(t, editor, "painting left of the canvas")
+}
+
+func TestPreviewShowsPaintOutsideTheCanvas(t *testing.T) {
+	editor := newMouseEditor(t)
+	editor.isPreviewPlaying = false
+	paintOutsideTheCanvas(t, editor)
+	area := editor.preview.area
+	isShown := false
+	for y := range area.Height {
+		isShown = isShown || area.X <= -3 && editor.preview.pixels[y*area.Width-3-area.X] != sprite.Transparent
+	}
+	if !isShown {
+		t.Fatalf("the preview should reach the paint left of the canvas, area %+v", area)
+	}
+}
+
+func TestSnapshotThumbnailsShowPaintOutsideTheCanvas(t *testing.T) {
+	editor := newMouseEditor(t)
+	paintOutsideTheCanvas(t, editor)
+	thumbnail := editor.thumbnail(0, editor.sheet.Grow(nil))
+	if thumbnail.area.X > -3 || thumbnail.image.Bounds().Dx() <= editor.sheet.Width {
+		t.Fatalf("a snapshot thumbnail should reach the paint left of the canvas, area %+v", thumbnail.area)
 	}
 }

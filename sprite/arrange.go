@@ -28,7 +28,7 @@ func (s *Sheet) MoveParts(chosen []int, deltaX, deltaY int) {
 func (s *Sheet) FlipSkeleton() {
 	s.remapEverything(func(x, y int) (int, int) { return s.Width - 1 - x, y })
 	for _, part := range s.Parts {
-		part.Range = [2]float64{-part.Range[1], -part.Range[0]}
+		part.Limits = part.Limits.flipped()
 	}
 	s.eachJoint(func(joint *Joint) {
 		joint.Angle = -joint.Angle
@@ -36,7 +36,9 @@ func (s *Sheet) FlipSkeleton() {
 		joint.Turn = -joint.Turn
 	})
 	for _, part := range s.Parts {
-		part.eachView(func(view *View) { view.Turn = -view.Turn })
+		for _, view := range part.Views {
+			view.Turn = -view.Turn
+		}
 	}
 }
 
@@ -68,9 +70,9 @@ func (s *Sheet) ResizeCanvas(width, height int) {
 	deltaX, deltaY := (width-s.Width)/2, height-s.Height
 	shift := func(x, y int) (int, int) { return x + deltaX, y + deltaY }
 	for _, part := range s.Parts {
-		part.remap(shift, width, height)
+		part.remap(shift)
 	}
-	s.eachBakedFrame(func(frame *Frame) { frame.Pixels = remapPixels(frame.Pixels, s.Width, width, height, shift) })
+	s.eachBakedFrame(func(frame *Frame) { frame.Baked = frame.Baked.mapped(shift) })
 	s.Width, s.Height = width, height
 }
 
@@ -78,13 +80,12 @@ func (s *Sheet) ClearPaint() {
 	for _, part := range s.Parts {
 		part.Clear()
 	}
-	s.eachBakedFrame(func(frame *Frame) { frame.Pixels = nil })
+	s.eachBakedFrame(func(frame *Frame) { frame.Baked = nil })
 }
 
 func (p *Part) Clear() {
-	clear(p.Pixels)
+	p.Layer.Clear()
 	p.Views = nil
-	p.isStale = true
 }
 
 // ===== Internal =====
@@ -100,31 +101,18 @@ func (s *Sheet) isCarriedBy(index int, chosen []int) bool {
 
 func (s *Sheet) remapEverything(mapping pixelMapping) {
 	for _, part := range s.Parts {
-		part.remap(mapping, s.Width, s.Height)
+		part.remap(mapping)
 	}
-	s.eachBakedFrame(func(frame *Frame) { frame.Pixels = remapPixels(frame.Pixels, s.Width, s.Width, s.Height, mapping) })
+	s.eachBakedFrame(func(frame *Frame) { frame.Baked = frame.Baked.mapped(mapping) })
 }
 
-func (p *Part) remap(mapping pixelMapping, width, height int) {
-	p.Pixels = remapPixels(p.Pixels, p.width, width, height, mapping)
-	p.eachView(func(view *View) { view.Pixels = remapPixels(view.Pixels, p.width, width, height, mapping) })
-	p.width, p.height = width, height
+func (p *Part) remap(mapping pixelMapping) {
+	p.Layer = p.Layer.mapped(mapping)
+	for _, view := range p.Views {
+		view.Layer = view.Layer.mapped(mapping)
+	}
 	p.Pivot = mapPoint(p.Pivot, mapping)
 	p.Tip = mapPoint(p.Tip, mapping)
-	p.isStale = true
-}
-
-func remapPixels(pixels []uint8, sourceWidth, width, height int, mapping pixelMapping) []uint8 {
-	moved := make([]uint8, width*height)
-	for index, value := range pixels {
-		x, y := mapping(index%sourceWidth, index/sourceWidth)
-		isInside := x >= 0 && y >= 0 && x < width && y < height
-		if !isInside || value == Transparent {
-			continue
-		}
-		moved[y*width+x] = value
-	}
-	return moved
 }
 
 func mapPoint(point Point, mapping pixelMapping) Point {
@@ -149,19 +137,17 @@ func (s *Sheet) eachBakedFrame(change func(frame *Frame)) {
 }
 
 func (s *Sheet) changeIfBaked(frame *Frame, change func(frame *Frame)) {
-	if frame.Pixels == nil {
+	if frame.Baked == nil {
 		return
 	}
 	change(frame)
 }
 
 func (s *Sheet) skeletonBounds() box {
-	bounds := box{minX: s.Width, minY: s.Height}
+	bounds := emptyBox
 	for _, part := range s.Parts {
 		bounds = bounds.includeIf(part.Pivot.X, part.Pivot.Y, true).includeIf(part.Tip.X, part.Tip.Y, true)
-		for index, value := range part.Pixels {
-			bounds = bounds.includeIf(index%s.Width, index/s.Width, value != Transparent)
-		}
+		part.Each(func(x, y int, _ uint8) { bounds = bounds.includeIf(x, y, true) })
 	}
 	return bounds
 }

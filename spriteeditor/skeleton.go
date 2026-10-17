@@ -1,7 +1,8 @@
-package editor
+package spriteeditor
 
 import (
 	"fmt"
+	"strings"
 
 	"ajkurig/sprite"
 )
@@ -101,6 +102,21 @@ func (e *Editor) layoutOrientation(y float32) float32 {
 		{"TURN LEFT", "orient.left", false, func() { e.arrange(func() { e.sheet.TurnSkeleton(false) }) }},
 		{"TURN RIGHT", "orient.right", false, func() { e.arrange(func() { e.sheet.TurnSkeleton(true) }) }},
 	})
+}
+
+func (e *Editor) layoutAnatomySection(y float32) float32 {
+	y = e.sectionTitle(y, "ANATOMY  (how far each joint may bend)")
+	buttons := make([]rowButton, 0, len(sprite.Anatomies))
+	for _, anatomy := range sprite.Anatomies {
+		buttons = append(buttons, rowButton{strings.ToUpper(anatomy.Name), "anatomy." + anatomy.Name, false, func() { e.applyAnatomy(anatomy) }})
+	}
+	return e.layoutSideRow(y, buttons)
+}
+
+func (e *Editor) applyAnatomy(anatomy sprite.Anatomy) {
+	e.record()
+	count := e.sheet.ApplyAnatomy(anatomy)
+	e.notify(fmt.Sprintf("The %s limits now hold %d parts, the ones named like the template", anatomy.Name, count), colorGood)
 }
 
 func (e *Editor) layoutCanvasSize(y float32) float32 {

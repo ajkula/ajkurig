@@ -1,4 +1,4 @@
-package editor
+package spriteeditor
 
 import "slices"
 
@@ -52,13 +52,13 @@ var modes = [modeCount]modeSpec{
 	ModeDraw: {
 		label:      "3  DRAW",
 		feature:    "mode.draw",
-		tools:      []Tool{ToolPencil, ToolFill, ToolPicker, ToolTrace, ToolHand},
+		tools:      []Tool{ToolPencil, ToolSelect, ToolFill, ToolPicker, ToolTrace, ToolHand},
 		isRest:     true,
 		partsTitle: "PARTS  click the one to paint",
 		guideTitle: "STEP 3 OF 4  -  DRAW: one piece of the body at a time",
 		guide: []string{
 			"Click a part on the left (head, torso, a thigh...). Only that part takes paint, the others stay faint behind it.",
-			"Pick a colour on the right, then paint with the PENCIL. Right click erases. Zoom with the wheel to work pixel by pixel.",
+			"Pick a colour on the right, then paint with the PENCIL. Right click erases what is under the cursor. SELECT moves a group of pixels. Zoom with the wheel.",
 			"To copy a model, drop a picture on this window: it appears under the drawing and you paint over it.",
 			"Each part moves with its bone, so the PREVIEW already animates what you paint. Then go to step 4.",
 		},
@@ -66,7 +66,7 @@ var modes = [modeCount]modeSpec{
 	ModeAnimate: {
 		label:      "4  ANIMATE",
 		feature:    "mode.animate",
-		tools:      []Tool{ToolPose, ToolPencil, ToolPicker, ToolHand},
+		tools:      []Tool{ToolPose, ToolPencil, ToolSelect, ToolPicker, ToolHand},
 		isRest:     false,
 		partsTitle: "PARTS  Ctrl+click: several",
 		guideTitle: "STEP 4 OF 4  -  ANIMATE",
@@ -82,6 +82,7 @@ var toolHomes = [toolCount]Mode{
 	ToolHand:   ModeDraw,
 	ToolTrace:  ModeDraw,
 	ToolPlace:  ModeSkeleton,
+	ToolSelect: ModeDraw,
 }
 
 var toolFeatures = [toolCount]string{
@@ -93,6 +94,7 @@ var toolFeatures = [toolCount]string{
 	ToolHand:   "tool.hand",
 	ToolTrace:  "tool.trace",
 	ToolPlace:  "tool.place",
+	ToolSelect: "tool.select",
 }
 
 // ===== Modes =====

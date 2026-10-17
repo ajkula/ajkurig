@@ -1,11 +1,10 @@
-package editor
+package spriteeditor
 
 import (
 	"fmt"
 	"image/color"
 	"slices"
 
-	"github.com/hajimehoshi/ebiten/v2"
 	"github.com/hajimehoshi/ebiten/v2/text/v2"
 
 	"ajkurig/mathx"
@@ -121,12 +120,12 @@ func (e *Editor) carrySelection(pose, start sprite.Pose, primaryStart, moved spr
 		if index == e.partIndex || !e.isSelected(index) {
 			continue
 		}
-		pose[index] = sprite.Joint{
-			Angle:   e.limitAngle(index, start[index].Angle+moved.Angle-primaryStart.Angle),
-			Shift:   sprite.Point{X: start[index].Shift.X + moved.Shift.X - primaryStart.Shift.X, Y: start[index].Shift.Y + moved.Shift.Y - primaryStart.Shift.Y},
-			Turn:    normalizeAngle(start[index].Turn + moved.Turn - primaryStart.Turn),
-			Drawing: start[index].Drawing,
-		}
+		carried := start[index]
+		carried.Angle = e.limitAngle(index, start[index].Angle+moved.Angle-primaryStart.Angle)
+		carried.Shift = sprite.Point{X: start[index].Shift.X + moved.Shift.X - primaryStart.Shift.X, Y: start[index].Shift.Y + moved.Shift.Y - primaryStart.Shift.Y}
+		carried.Turn = normalizeAngle(start[index].Turn + moved.Turn - primaryStart.Turn)
+		carried.Tilt = normalizeAngle(start[index].Tilt + moved.Tilt - primaryStart.Tilt)
+		pose[index] = carried
 	}
 }
 
@@ -211,7 +210,7 @@ func (e *Editor) appendSnapshot(index int) {
 
 func (e *Editor) isEmptyMove() bool {
 	frames := e.currentAnimation().Frames
-	if len(frames) != 1 || frames[0].Pixels != nil {
+	if len(frames) != 1 || frames[0].Baked != nil {
 		return false
 	}
 	return !slices.ContainsFunc(frames[0].Pose, func(joint sprite.Joint) bool { return joint != sprite.Joint{} })
@@ -372,31 +371,34 @@ func (e *Editor) layoutThumbnail(index int, rect Rect) {
 	if e.ui.Button(rect, "", index == e.snapshotIndex, "snap.gallery") {
 		e.loadSnapshot(index)
 	}
-	width, height := float32(e.sheet.Width), float32(e.sheet.Height)
+	thumbnail := e.thumbnail(index, snapshot.Pose)
+	width, height := float32(thumbnail.area.Width), float32(thumbnail.area.Height)
 	scale := min(rect.W/width, rect.H/height)
 	shown := Rect{rect.X + (rect.W-width*scale)/2, rect.Y + (rect.H-height*scale)/2, width * scale, height * scale}
-	e.ui.Image(shown, e.thumbnail(index, snapshot.Pose), 1)
-	e.layoutPoseBones(shown, scale, snapshot.Pose)
+	e.ui.Image(shown, thumbnail.image, 1)
+	e.layoutPoseBones(shown, scale, thumbnail.area, snapshot.Pose)
 	e.ui.Text(rect.X+rect.W/2, rect.Y+rect.H+2, snapshot.Name, colorText, text.AlignCenter)
 }
 
-func (e *Editor) thumbnail(index int, pose sprite.Pose) *ebiten.Image {
-	for len(e.thumbImages) <= index {
-		e.thumbImages = append(e.thumbImages, ebiten.NewImage(e.sheet.Width, e.sheet.Height))
+func (e *Editor) thumbnail(index int, pose sprite.Pose) *framedImage {
+	for len(e.thumbnails) <= index {
+		e.thumbnails = append(e.thumbnails, &framedImage{})
 	}
-	e.sheet.Render(e.sheet.Grow(slices.Clone(pose)), e.thumbPixels)
-	e.sheet.WriteRGBA(e.thumbPixels, e.rgba)
-	e.thumbImages[index].WritePixels(e.rgba)
-	return e.thumbImages[index]
+	grown, thumbnail := e.sheet.Grow(slices.Clone(pose)), e.thumbnails[index]
+	thumbnail.frame(e.sheet.Canvas().Union(e.sheet.PoseArea(grown)))
+	e.sheet.RenderIn(grown, thumbnail.area, thumbnail.pixels)
+	e.writeImage(thumbnail.image, thumbnail.pixels)
+	return thumbnail
 }
 
-func (e *Editor) layoutPoseBones(rect Rect, scale float32, pose sprite.Pose) {
+func (e *Editor) layoutPoseBones(rect Rect, scale float32, area sprite.Area, pose sprite.Pose) {
 	ends := e.hangerEnds(e.sheet.BoneEnds(e.sheet.Transforms(e.sheet.Grow(slices.Clone(pose)))))
 	for index, end := range ends {
 		if e.isHiddenHanger(index) {
 			continue
 		}
 		tint := [2]color.Color{colorBone, colorHanger}[mathx.BoolToIndex(e.isHanger(index))]
-		e.ui.Line(rect.X+float32(end[0][0])*scale, rect.Y+float32(end[0][1])*scale, rect.X+float32(end[1][0])*scale, rect.Y+float32(end[1][1])*scale, 2, tint)
+		left, top := rect.X-float32(area.X)*scale, rect.Y-float32(area.Y)*scale
+		e.ui.Line(left+float32(end[0][0])*scale, top+float32(end[0][1])*scale, left+float32(end[1][0])*scale, top+float32(end[1][1])*scale, 2, tint)
 	}
 }

@@ -100,16 +100,16 @@ func TestViewFollowsTheFacing(t *testing.T) {
 	sheet := turningHumanoid()
 	head := sheet.FindPart("head")
 	back := sheet.Parts[head].AddView(180)
-	back.Pixels[sheet.Parts[head].Pivot.Y*sheet.Width+sheet.Parts[head].Pivot.X] = 9
+	back.Set(sheet.Parts[head].Pivot.X, sheet.Parts[head].Pivot.Y, 9)
 	pose := sheet.Grow(nil)
 	pose[sheet.FindPart("hips")].Turn = 170
 	sheet.Transforms(pose)
-	if sheet.layers[head] == sheet.Parts[head] {
+	if sheet.layers[head] == sheet.Parts[head].Layer {
 		t.Fatal("seen from behind, the head shows its back view")
 	}
 	pose[sheet.FindPart("hips")].Turn = 20
 	sheet.Transforms(pose)
-	if sheet.layers[head] != sheet.Parts[head] {
+	if sheet.layers[head] != sheet.Parts[head].Layer {
 		t.Fatal("seen from the front, the head shows its own pixels")
 	}
 }
@@ -121,21 +121,21 @@ func TestHangerChoosesTheTorsoView(t *testing.T) {
 	pose := sheet.Grow(nil)
 	pose[sheet.FindPart("shoulders")].Turn = 90
 	sheet.Transforms(pose)
-	if sheet.layers[torso] == sheet.Parts[torso] {
+	if sheet.layers[torso] == sheet.Parts[torso].Layer {
 		t.Fatal("turning the shoulders hanger shows the matching torso view")
 	}
 }
 
 func TestTurnsAndViewsSurviveWriting(t *testing.T) {
 	sheet := turningHumanoid()
-	sheet.Parts[sheet.FindPart("head")].AddView(180).Pixels[5] = 3
+	sheet.Parts[sheet.FindPart("head")].AddView(180).Set(5, 0, 3)
 	sheet.Animations[0].Frames[0].Pose[sheet.FindPart("torso")].Turn = 35
 	reread, err := Parse(Write(sheet))
 	if err != nil {
 		t.Fatal(err)
 	}
 	head := reread.Parts[reread.FindPart("head")]
-	if len(head.Views) != 1 || head.Views[0].Turn != 180 || head.Views[0].Pixels[5] != 3 {
+	if len(head.Views) != 1 || head.Views[0].Turn != 180 || head.Views[0].At(5, 0) != 3 {
 		t.Fatalf("the head view is kept, got %+v", head.Views)
 	}
 	if reread.Parts[reread.FindPart("arm_back_upper")].Depth != 4 {
@@ -263,15 +263,15 @@ func TestSolveKneeKeepsTheLeastBend(t *testing.T) {
 func TestNamedDrawingIsShownOnlyWhenAsked(t *testing.T) {
 	sheet := turningHumanoid()
 	fore := sheet.FindPart("arm_back_fore")
-	sheet.Parts[fore].AddDrawing("side", 0).Pixels[5] = 4
+	sheet.Parts[fore].AddDrawing("side", 0).Set(5, 0, 4)
 	pose := sheet.Grow(nil)
 	sheet.Transforms(pose)
-	if sheet.layers[fore] != sheet.Parts[fore] {
+	if sheet.layers[fore] != sheet.Parts[fore].Layer {
 		t.Fatal("a named drawing is never chosen by the facing")
 	}
 	pose[fore].Drawing = "side"
 	sheet.Transforms(pose)
-	if sheet.layers[fore] == sheet.Parts[fore] {
+	if sheet.layers[fore] == sheet.Parts[fore].Layer {
 		t.Fatal("a joint asking for a drawing shows it")
 	}
 	sheet.Animations[0].Frames[0].Pose = pose
@@ -280,7 +280,7 @@ func TestNamedDrawingIsShownOnlyWhenAsked(t *testing.T) {
 		t.Fatal(err)
 	}
 	kept := reread.Parts[reread.FindPart("arm_back_fore")].FindDrawing("side")
-	if kept == nil || kept.Pixels[5] != 4 || reread.Animations[0].Frames[0].Pose[fore].Drawing != "side" {
+	if kept == nil || kept.At(5, 0) != 4 || reread.Animations[0].Frames[0].Pose[fore].Drawing != "side" {
 		t.Fatal("drawings and the joints asking for them survive writing")
 	}
 }

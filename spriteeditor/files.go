@@ -1,6 +1,7 @@
-package editor
+package spriteeditor
 
 import (
+	"io/fs"
 	"os"
 	"path/filepath"
 	"slices"
@@ -24,6 +25,7 @@ const (
 	DialogNone Dialog = iota
 	DialogOpen
 	DialogImport
+	DialogUnsaved
 )
 
 const (
@@ -36,14 +38,24 @@ const (
 )
 
 var dialogLayouts = map[Dialog]func(e *Editor, box Rect){
-	DialogOpen:   (*Editor).layoutOpenDialog,
-	DialogImport: (*Editor).layoutImportDialog,
+	DialogOpen:    (*Editor).layoutOpenDialog,
+	DialogImport:  (*Editor).layoutImportDialog,
+	DialogUnsaved: (*Editor).layoutUnsavedDialog,
 }
 
 var dialogTitles = map[Dialog]string{
-	DialogOpen:   "OPEN A SPRITE",
-	DialogImport: "IMPORT MOVES FROM ANOTHER SPRITE",
+	DialogOpen:    "OPEN A SPRITE",
+	DialogImport:  "IMPORT MOVES FROM ANOTHER SPRITE",
+	DialogUnsaved: "UNSAVED CHANGES",
 }
+
+var dialogCancelButtons = map[Dialog][2]string{
+	DialogOpen:    {"CLOSE", "dialog.close"},
+	DialogImport:  {"CLOSE", "dialog.close"},
+	DialogUnsaved: {"CANCEL", "unsaved.cancel"},
+}
+
+var pendingActions = [2]func(e *Editor){(*Editor).switchToPending, (*Editor).quit}
 
 // ===== Opening =====
 
@@ -51,17 +63,49 @@ func (e *Editor) showDialog(dialog Dialog) {
 	e.dialog, e.importPath, e.importSheet = dialog, "", nil
 }
 
+func (e *Editor) RequestClose() {
+	e.isClosing = true
+	e.proceedUnlessDirty()
+}
+
 func (e *Editor) openSprite(path string) {
-	if e.isDirty && !e.isBroken {
-		e.save()
-	}
-	if e.isDirty && !e.isBroken {
+	e.pendingPath, e.isClosing = path, false
+	e.proceedUnlessDirty()
+}
+
+func (e *Editor) proceedUnlessDirty() {
+	if e.isDirty {
+		e.dialog = DialogUnsaved
 		return
 	}
+	e.proceed()
+}
+
+func (e *Editor) saveAndProceed() {
+	e.save()
+	if e.isDirty {
+		return
+	}
+	e.proceed()
+}
+
+func (e *Editor) proceed() {
+	pendingActions[mathx.BoolToIndex(e.isClosing)](e)
+}
+
+func (e *Editor) quit() {
+	e.isQuitting, e.dialog = true, DialogNone
+}
+
+func (e *Editor) switchToPending() {
+	e.switchSprite(e.pendingPath)
+}
+
+func (e *Editor) switchSprite(path string) {
 	width, height := e.sheet.Width, e.sheet.Height
-	e.path, e.history, e.future, e.reference = path, nil, nil, nil
+	e.path, e.pendingPath, e.history, e.future, e.reference = path, "", nil, nil, nil
 	e.partIndex, e.animationIndex, e.frameIndex, e.snapshotIndex = 0, 0, 0, 0
-	e.selected, e.workPose = nil, nil
+	e.selected, e.workPose, e.selection, e.pins = nil, nil, pixelSelection{}, nil
 	e.loadOrCreate(width, height)
 	e.restoreReference()
 	e.dialog = DialogNone
@@ -78,12 +122,29 @@ func (e *Editor) createSprite() {
 }
 
 func (e *Editor) spriteFiles() []string {
-	paths, err := filepath.Glob(filepath.Join(filepath.Dir(e.path), "*"+sprite.SheetExtension))
-	if err != nil {
+	var paths []string
+	filepath.WalkDir(e.projectRoot, func(path string, entry fs.DirEntry, err error) error {
+		if err != nil {
+			return nil
+		}
+		if entry.IsDir() && path != e.projectRoot && strings.HasPrefix(entry.Name(), ".") {
+			return filepath.SkipDir
+		}
+		if !entry.IsDir() && filepath.Ext(path) == sprite.SheetExtension {
+			paths = append(paths, path)
+		}
 		return nil
-	}
-	slices.Sort(paths)
+	})
+	slices.SortFunc(paths, func(first, second string) int { return strings.Compare(e.projectName(first), e.projectName(second)) })
 	return paths
+}
+
+func (e *Editor) projectName(path string) string {
+	relative, err := filepath.Rel(e.projectRoot, path)
+	if err != nil {
+		return sprite.SheetName(path)
+	}
+	return filepath.ToSlash(strings.TrimSuffix(relative, sprite.SheetExtension))
 }
 
 func cleanSpriteName(name string) string {
@@ -142,13 +203,14 @@ func (e *Editor) layoutDialog() {
 	e.ui.Text(box.X+dialogMargin, box.Y+dialogMargin, dialogTitles[e.dialog], colorAccent, text.AlignStart)
 	layout(e, box)
 	closeRect := Rect{box.X + box.W - dialogMargin - 100, box.Y + box.H - dialogMargin - buttonHeight, 100, buttonHeight}
-	isClosing := e.ui.Button(closeRect, "CLOSE", false, "dialog.close") || inpututil.IsKeyJustPressed(ebiten.KeyEscape)
+	cancel := dialogCancelButtons[e.dialog]
+	isClosing := e.ui.Button(closeRect, cancel[0], false, cancel[1]) || inpututil.IsKeyJustPressed(ebiten.KeyEscape)
 	e.dialog = [2]Dialog{e.dialog, DialogNone}[mathx.BoolToIndex(isClosing)]
 }
 
 func (e *Editor) layoutOpenDialog(box Rect) {
 	x, y := box.X+dialogMargin, box.Y+dialogMargin+2*lineHeight
-	e.ui.Text(x, y, "Sprites next to this one:", colorTextDim, text.AlignStart)
+	e.ui.Text(x, y, "Sprites of the project:", colorTextDim, text.AlignStart)
 	y = e.layoutFileButtons(x, y+lineHeight+4, e.path, "open.file", e.openSprite)
 	column := x + dialogColumn
 	top := box.Y + dialogMargin + 2*lineHeight
@@ -157,8 +219,21 @@ func (e *Editor) layoutOpenDialog(box Rect) {
 	if e.ui.Button(Rect{column + fileButtonWidth + 8, top + lineHeight + 4, 100, buttonHeight}, "CREATE", true, "open.create") {
 		e.createSprite()
 	}
-	note := [2]string{"", "Your changes to " + filepath.Base(e.path) + " are saved before another sprite opens."}[mathx.BoolToIndex(e.isDirty)]
+	note := [2]string{"", "Changes to " + filepath.Base(e.path) + " are not saved: you will choose to keep them or not."}[mathx.BoolToIndex(e.isDirty)]
 	e.ui.Text(column, top+lineHeight+buttonHeight+16, note, colorAccent, text.AlignStart)
+}
+
+func (e *Editor) layoutUnsavedDialog(box Rect) {
+	x, y := box.X+dialogMargin, box.Y+dialogMargin+2*lineHeight
+	e.ui.Text(x, y, filepath.Base(e.path)+" has changes that are not saved.", colorText, text.AlignStart)
+	e.ui.Text(x, y+lineHeight, [2]string{"Before opening " + e.projectName(e.pendingPath) + ":", "Before closing the editor:"}[mathx.BoolToIndex(e.isClosing)], colorTextDim, text.AlignStart)
+	row := y + 3*lineHeight
+	if e.ui.Button(Rect{x, row, fileButtonWidth, buttonHeight}, "SAVE", true, "unsaved.save") {
+		e.saveAndProceed()
+	}
+	if e.ui.Button(Rect{x + fileButtonWidth + 8, row, fileButtonWidth, buttonHeight}, "DISCARD", false, "unsaved.discard") {
+		e.proceed()
+	}
 }
 
 func (e *Editor) layoutImportDialog(box Rect) {
@@ -187,7 +262,7 @@ func (e *Editor) layoutFileButtons(x, y float32, chosen, id string, choose func(
 		if samePath(path, e.path) && id == "import.file" {
 			continue
 		}
-		if e.ui.Button(Rect{x, y, fileButtonWidth, buttonHeight}, sprite.SheetName(path), samePath(path, chosen), id) {
+		if e.ui.Button(Rect{x, y, fileButtonWidth, buttonHeight}, e.projectName(path), samePath(path, chosen), id) {
 			choose(path)
 		}
 		y += buttonHeight + rowGap

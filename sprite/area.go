@@ -19,7 +19,7 @@ func (s *Sheet) Canvas() Area {
 
 func (s *Sheet) PoseArea(pose Pose) Area {
 	s.resolveTransforms(pose)
-	bounds := box{minX: s.Width, minY: s.Height}
+	bounds := emptyBox
 	for index, layer := range s.layers {
 		layer.refresh()
 		bounds = bounds.unionIf(transformBox(layer.bounds, s.transforms[index]), !layer.bounds.isEmpty())
@@ -29,8 +29,8 @@ func (s *Sheet) PoseArea(pose Pose) Area {
 
 func (s *Sheet) FrameArea(animation *Animation, index int) Area {
 	frame := &animation.Frames[index]
-	if frame.Pixels != nil {
-		return pixelBounds(frame.Pixels, s.Width, s.Height).area()
+	if frame.Baked != nil {
+		return frame.Baked.Area()
 	}
 	return s.PoseArea(s.FramePose(animation, index))
 }
@@ -44,24 +44,21 @@ func (s *Sheet) AnimationArea(animation *Animation) Area {
 }
 
 func (s *Sheet) RenderIn(pose Pose, area Area, target []uint8) {
-	s.renderSelectionIn(pose, isEveryPart, area, target)
+	s.RenderSelectionIn(pose, isEveryPart, area, target)
 }
 
 func (s *Sheet) RenderFrameIn(animation *Animation, index int, area Area, target []uint8) {
 	frame := &animation.Frames[index]
-	if frame.Pixels == nil {
+	if frame.Baked == nil {
 		s.RenderIn(s.FramePose(animation, index), area, target)
 		return
 	}
 	clear(target)
-	for offset, value := range frame.Pixels {
-		x, y := offset%s.Width-area.X, offset/s.Width-area.Y
-		isInside := x >= 0 && y >= 0 && x < area.Width && y < area.Height
-		if value == Transparent || !isInside {
-			continue
+	frame.Baked.Each(func(x, y int, value uint8) {
+		if area.Contains(x, y) {
+			target[(y-area.Y)*area.Width+x-area.X] = value
 		}
-		target[y*area.Width+x] = value
-	}
+	})
 }
 
 func (s *Sheet) Anchor() (float64, float64) {
@@ -82,6 +79,10 @@ func (a Area) Union(other Area) Area {
 	}
 	minX, minY := min(a.X, other.X), min(a.Y, other.Y)
 	return Area{minX, minY, max(a.X+a.Width, other.X+other.Width) - minX, max(a.Y+a.Height, other.Y+other.Height) - minY}
+}
+
+func (a Area) Contains(x, y int) bool {
+	return x >= a.X && y >= a.Y && x < a.X+a.Width && y < a.Y+a.Height
 }
 
 // ===== Internal =====

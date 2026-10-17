@@ -24,35 +24,34 @@ type Joint struct {
 	Angle   float64
 	Shift   Point
 	Turn    float64
+	Tilt    float64
 	Drawing string
 }
 
 type Pose []Joint
 
 type Part struct {
-	Name      string
-	Parent    int
-	Pivot     Point
-	Tip       Point
-	Range     [2]float64
-	IsLimited bool
-	Depth     int
-	Pixels    []uint8
+	Name        string
+	Parent      int
+	Pivot       Point
+	Tip         Point
+	Limits      JointLimits
+	LimitedAxes uint8
+	Depth       int
+	IsSolid     bool
+	*Layer
 	Views     []*View
-	width     int
-	height    int
-	bounds    box
-	upscaled  []uint8
-	isStale   bool
+	volume    *Volume
+	volumeKey []volumeSource
 }
 
 type FrameKind uint8
 
 type Frame struct {
-	Kind   FrameKind
-	Ticks  int
-	Pose   Pose
-	Pixels []uint8
+	Kind  FrameKind
+	Ticks int
+	Pose  Pose
+	Baked *Layer
 }
 
 type Animation struct {
@@ -79,9 +78,13 @@ type Sheet struct {
 	orientations []orientation
 	positions    [][3]float64
 	facings      []float64
+	tilts        []float64
 	depths       []float64
 	ownDepths    []float64
-	layers       []*Part
+	depthReaches []float64
+	depthPlanes  [][3]float64
+	depthBuffer  []float64
+	layers       []*Layer
 	order        []int
 	carriers     []int
 	childCounts  []int
@@ -157,10 +160,10 @@ func (s *Sheet) AddPart(name string, parent int, pivot Point) int {
 func (s *Sheet) DuplicatePart(index int) int {
 	source := s.Parts[index]
 	copied := s.newPart(source.Name, source.Parent, source.Pivot)
-	copied.Tip, copied.Range, copied.IsLimited, copied.Depth = source.Tip, source.Range, source.IsLimited, source.Depth
-	copy(copied.Pixels, source.Pixels)
+	copied.Tip, copied.Limits, copied.LimitedAxes, copied.Depth, copied.IsSolid = source.Tip, source.Limits, source.LimitedAxes, source.Depth, source.IsSolid
+	copied.Layer = source.Layer.Clone()
 	for _, view := range source.Views {
-		copied.Views = append(copied.Views, &View{Turn: view.Turn, Pixels: slices.Clone(view.Pixels)})
+		copied.Views = append(copied.Views, &View{Turn: view.Turn, Tilt: view.Tilt, Name: view.Name, Layer: view.Layer.Clone()})
 	}
 	s.Parts = slices.Insert(s.Parts, index+1, copied)
 	for _, part := range s.Parts {
@@ -247,16 +250,39 @@ func (s *Sheet) Render(pose Pose, target []uint8) {
 }
 
 func (s *Sheet) RenderSelection(pose Pose, isShown func(index int) bool, target []uint8) {
-	s.renderSelectionIn(pose, isShown, s.Canvas(), target)
+	s.RenderSelectionIn(pose, isShown, s.Canvas(), target)
+}
+
+func (s *Sheet) RenderSelectionIn(pose Pose, isShown func(index int) bool, area Area, target []uint8) {
+	clear(target)
+	s.resolveTransforms(pose)
+	s.depthBuffer = slices.Grow(s.depthBuffer[:0], len(target))[:len(target)]
+	for index := range s.depthBuffer {
+		s.depthBuffer[index] = math.Inf(1)
+	}
+	outline := s.darkestColor()
+	for _, index := range s.order {
+		if !isShown(index) {
+			continue
+		}
+		partStampers[boolToInt(s.Parts[index].IsSolid)](s, index, area, target, outline)
+	}
 }
 
 func (s *Sheet) RenderFrame(animation *Animation, index int, target []uint8) {
-	frame := &animation.Frames[index]
-	if frame.Pixels != nil {
-		copy(target, frame.Pixels)
-		return
+	s.RenderFrameIn(animation, index, s.Canvas(), target)
+}
+
+func (s *Sheet) Bake(animation *Animation, index int) {
+	pose := s.FramePose(animation, index)
+	area := s.PoseArea(pose)
+	pixels := make([]uint8, area.Width*area.Height)
+	s.RenderIn(pose, area, pixels)
+	baked := NewLayer()
+	for offset, value := range pixels {
+		baked.Set(area.X+offset%area.Width, area.Y+offset/area.Width, value)
 	}
-	s.Render(s.FramePose(animation, index), target)
+	animation.Frames[index].Baked = baked
 }
 
 func (s *Sheet) WriteRGBA(pixels []uint8, target []byte) {
@@ -266,6 +292,15 @@ func (s *Sheet) WriteRGBA(pixels []uint8, target []byte) {
 		offset := index * 4
 		target[offset], target[offset+1], target[offset+2], target[offset+3] = color[0], color[1], color[2], alpha
 	}
+}
+
+func (f *Frame) Copy() Frame {
+	copied := *f
+	copied.Pose = slices.Clone(f.Pose)
+	if f.Baked != nil {
+		copied.Baked = f.Baked.Clone()
+	}
+	return copied
 }
 
 func (a *Animation) FrameAt(tick int) int {
@@ -302,69 +337,19 @@ func (a *Animation) KeyStart(key int) int {
 	return tick
 }
 
-func (p *Part) At(x, y int) uint8 {
-	if !p.isInside(x, y) {
-		return Transparent
-	}
-	return p.Pixels[y*p.width+x]
-}
-
-func (p *Part) Set(x, y int, value uint8) bool {
-	if !p.isInside(x, y) {
-		return false
-	}
-	p.Pixels[y*p.width+x] = value
-	p.isStale = true
-	return true
-}
-
-func (p *Part) Limit(angle float64) float64 {
-	if !p.IsLimited {
-		return angle
-	}
-	return min(max(angle, p.Range[0]), p.Range[1])
-}
-
-func (p *Part) Invalidate() {
-	p.isStale = true
-}
-
 func (p *Part) Mirror() {
-	p.Pixels = p.mirrorPixels(p.Pixels)
-	p.eachView(func(view *View) { view.Pixels, view.Turn = p.mirrorPixels(view.Pixels), -view.Turn })
+	mirror := func(x, y int) (int, int) { return 2*p.Pivot.X - x, y }
+	p.Layer = p.Layer.mapped(mirror)
+	for _, view := range p.Views {
+		view.Layer, view.Turn = view.Layer.mapped(mirror), -view.Turn
+	}
 	p.Tip.X = 2*p.Pivot.X - p.Tip.X
-	p.isStale = true
-}
-
-func FloodFill(pixels []uint8, width, height, x, y int, value uint8) {
-	isInside := x >= 0 && y >= 0 && x < width && y < height
-	if !isInside || pixels[y*width+x] == value {
-		return
-	}
-	original := pixels[y*width+x]
-	stack := []Point{{x, y}}
-	for len(stack) > 0 {
-		point := stack[len(stack)-1]
-		stack = stack[:len(stack)-1]
-		stack = fillPoint(pixels, width, height, point, original, value, stack)
-	}
 }
 
 // ===== Internal =====
 
-func (p *Part) mirrorPixels(pixels []uint8) []uint8 {
-	mirrored := make([]uint8, len(pixels))
-	for index, value := range pixels {
-		x, y := index%p.width, index/p.width
-		mirroredX := 2*p.Pivot.X - x
-		isInside := mirroredX >= 0 && mirroredX < p.width
-		mirrored[y*p.width+mathx.ClampInt(mirroredX, 0, p.width-1)] |= value * uint8(mathx.BoolToIndex(isInside))
-	}
-	return mirrored
-}
-
 func (s *Sheet) newPart(name string, parent int, pivot Point) *Part {
-	return &Part{Name: name, Parent: parent, Pivot: pivot, Tip: pivot, Pixels: make([]uint8, s.Width*s.Height), width: s.Width, height: s.Height, isStale: true}
+	return &Part{Name: name, Parent: parent, Pivot: pivot, Tip: pivot, Layer: NewLayer()}
 }
 
 func (s *Sheet) eachPose(change func(pose *Pose)) {
@@ -403,7 +388,10 @@ func (s *Sheet) resolveTransforms(pose Pose) {
 	s.orientations = slices.Grow(s.orientations[:0], count)[:count]
 	s.positions = slices.Grow(s.positions[:0], count)[:count]
 	s.facings = slices.Grow(s.facings[:0], count)[:count]
+	s.tilts = slices.Grow(s.tilts[:0], count)[:count]
 	s.depths = slices.Grow(s.depths[:0], count)[:count]
+	s.depthReaches = slices.Grow(s.depthReaches[:0], count)[:count]
+	s.depthPlanes = slices.Grow(s.depthPlanes[:0], count)[:count]
 	s.layers = slices.Grow(s.layers[:0], count)[:count]
 	clear(s.isResolved)
 	for index := range s.Parts {
@@ -421,72 +409,49 @@ func (s *Sheet) placeOf(index int, pose Pose) {
 	s.placePart(index, jointAt(pose, index), s.parentFrame(s.Parts[index].Parent, pose))
 }
 
-func (s *Sheet) renderSelectionIn(pose Pose, isShown func(index int) bool, area Area, target []uint8) {
-	clear(target)
-	s.resolveTransforms(pose)
-	for _, index := range s.order {
-		s.stampIf(s.layers[index], s.transforms[index], area, target, isShown(index))
-	}
-}
-
-func (s *Sheet) stampIf(part *Part, transform Affine, area Area, target []uint8, isShown bool) {
-	part.refresh()
-	if !isShown || part.bounds.isEmpty() {
+func (s *Sheet) stampCard(index int, area Area, target []uint8, _ uint8) {
+	layer, transform := s.layers[index], s.transforms[index]
+	layer.refresh()
+	if layer.bounds.isEmpty() {
 		return
 	}
-	region := transformBox(part.bounds, transform).clipTo(area)
-	inverse := transform.Inverse()
+	region := transformBox(layer.bounds, transform).clipTo(area)
+	stamp := stamp{layer, transform.Inverse(), s.depthPlanes[index], nil}
 	isExact := isQuarterTurn(transform.Rotation())
-	part.prepareSampling(isExact)
-	sample := samplers[mathx.BoolToIndex(isExact)]
+	layer.prepareSampling(isExact)
+	stamp.sample = samplers[mathx.BoolToIndex(isExact)]
 	for y := region.minY; y < region.maxY; y++ {
-		stampRow(part, inverse, sample, y, region, area, target)
+		start, end := (y-area.Y)*area.Width, (y-area.Y+1)*area.Width
+		stamp.row(y, region.minX-area.X, region.maxX-area.X, area.X, target[start:end], s.depthBuffer[start:end])
 	}
 }
 
-func stampRow(part *Part, inverse Affine, sample func(*Part, float64, float64) uint8, y int, region box, area Area, target []uint8) {
-	row := target[(y-area.Y)*area.Width : (y-area.Y+1)*area.Width]
-	for x := region.minX; x < region.maxX; x++ {
-		sourceX, sourceY := inverse.Apply(float64(x)+0.5, float64(y)+0.5)
-		row[x-area.X] = overlay(row[x-area.X], sample(part, sourceX, sourceY))
+func (s *Sheet) stampSolid(index int, area Area, target []uint8, outline uint8) {
+	s.Parts[index].solidVolume().render(s.orientations[index], s.positions[index], outline, area, target, s.depthBuffer)
+}
+
+func (s *Sheet) darkestColor() uint8 {
+	darkest, lowest := 1, math.MaxInt
+	for index, swatch := range s.Palette[1:] {
+		brightness := 299*int(swatch.Color[0]) + 587*int(swatch.Color[1]) + 114*int(swatch.Color[2])
+		darkest, lowest = [2]int{darkest, index + 1}[boolToInt(brightness < lowest)], min(lowest, brightness)
+	}
+	return uint8(darkest)
+}
+
+func (p stamp) row(y, from, to, left int, pixels []uint8, depths []float64) {
+	for column := from; column < to; column++ {
+		sourceX, sourceY := p.inverse.Apply(float64(column+left)+0.5, float64(y)+0.5)
+		value := p.sample(p.layer, sourceX, sourceY)
+		depth := p.plane[0] + p.plane[1]*sourceX + p.plane[2]*sourceY
+		if value == Transparent || depth > depths[column]+depthMargin {
+			continue
+		}
+		pixels[column], depths[column] = value, depth
 	}
 }
 
-var samplers = [2]func(*Part, float64, float64) uint8{(*Part).sampleSmooth, (*Part).sampleExact}
-
-func (p *Part) isInside(x, y int) bool {
-	return x >= 0 && y >= 0 && x < p.width && y < p.height
-}
-
-func (p *Part) refresh() {
-	if !p.isStale {
-		return
-	}
-	p.isStale = false
-	p.upscaled = nil
-	p.bounds = pixelBounds(p.Pixels, p.width, p.height)
-}
-
-func (p *Part) prepareSampling(isExact bool) {
-	if isExact || p.upscaled != nil {
-		return
-	}
-	p.upscaled = upscale(p.Pixels, p.width, p.height)
-}
-
-func (p *Part) sampleExact(x, y float64) uint8 {
-	return p.At(int(math.Floor(x)), int(math.Floor(y)))
-}
-
-func (p *Part) sampleSmooth(x, y float64) uint8 {
-	upscaledX, upscaledY := int(math.Floor(x*upscaleFactor)), int(math.Floor(y*upscaleFactor))
-	upscaledWidth := p.width << upscaleShift
-	isInside := upscaledX >= 0 && upscaledY >= 0 && upscaledX < upscaledWidth && upscaledY < p.height<<upscaleShift
-	if !isInside {
-		return Transparent
-	}
-	return p.upscaled[upscaledY*upscaledWidth+upscaledX]
-}
+var samplers = [2]func(*Layer, float64, float64) uint8{(*Layer).sampleSmooth, (*Layer).sampleExact}
 
 func (a *Animation) findKey(index, direction int) (Pose, int, bool) {
 	count := len(a.Frames)
@@ -519,15 +484,6 @@ func frameAt(frames []Frame, tick int, isLooping bool) int {
 	return len(frames) - 1
 }
 
-func fillPoint(pixels []uint8, width, height int, point Point, original, value uint8, stack []Point) []Point {
-	isInside := point.X >= 0 && point.Y >= 0 && point.X < width && point.Y < height
-	if !isInside || pixels[point.Y*width+point.X] != original {
-		return stack
-	}
-	pixels[point.Y*width+point.X] = value
-	return append(stack, Point{point.X + 1, point.Y}, Point{point.X - 1, point.Y}, Point{point.X, point.Y + 1}, Point{point.X, point.Y - 1})
-}
-
 func isEveryPart(int) bool {
 	return true
 }
@@ -552,6 +508,7 @@ func mixJoint(from, to Joint, weight float64) Joint {
 		Angle:   from.Angle + turn*weight,
 		Shift:   Point{mixInt(from.Shift.X, to.Shift.X, weight), mixInt(from.Shift.Y, to.Shift.Y, weight)},
 		Turn:    from.Turn + math.Remainder(to.Turn-from.Turn, 360)*weight,
+		Tilt:    from.Tilt + math.Remainder(to.Tilt-from.Tilt, 360)*weight,
 		Drawing: [2]string{from.Drawing, to.Drawing}[boolToInt(weight >= 0.5)],
 	}
 }
@@ -591,13 +548,6 @@ func swapIndex(value, first, second int) int {
 	}
 	if value == second {
 		return first
-	}
-	return value
-}
-
-func overlay(existing, value uint8) uint8 {
-	if value == Transparent {
-		return existing
 	}
 	return value
 }

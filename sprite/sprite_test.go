@@ -62,8 +62,8 @@ func litPixels(sheet *Sheet, pixels []uint8) map[Point]uint8 {
 
 func TestWrittenSheetReadsBackIdentically(t *testing.T) {
 	sheet := mustParse(t, armSource)
-	sheet.Animations[0].Frames[1].Pixels = make([]uint8, sheet.Width*sheet.Height)
-	sheet.Animations[0].Frames[1].Pixels[10] = 2
+	sheet.Animations[0].Frames[1].Baked = NewLayer()
+	sheet.Animations[0].Frames[1].Baked.Set(10, 0, 2)
 	written := Write(sheet)
 	if again := Write(mustParse(t, written)); again != written {
 		t.Fatalf("second write differs:\n%s\n---\n%s", written, again)
@@ -250,11 +250,11 @@ func TestCounterpartSwapsFrontAndBack(t *testing.T) {
 func TestJointLimitsHoldAndSurviveSaving(t *testing.T) {
 	sheet := NewHumanoid("hero", 64, 64)
 	knee := sheet.Parts[sheet.FindPart("leg_front_shin")]
-	if knee.Limit(-40) != 0 || knee.Limit(200) != 150 || knee.Limit(60) != 60 {
-		t.Fatal("a knee only bends backwards, up to 150 degrees")
+	if knee.Limit(AxisZ, -40) != 0 || knee.Limit(AxisZ, 200) != 160 || knee.Limit(AxisZ, 60) != 60 {
+		t.Fatal("a knee only bends backwards, up to 160 degrees")
 	}
 	again := mustParse(t, Write(sheet))
-	if !again.Parts[again.FindPart("leg_front_shin")].IsLimited || again.Parts[again.FindPart("leg_front_shin")].Range != knee.Range {
+	if again.Parts[again.FindPart("leg_front_shin")].LimitedAxes != knee.LimitedAxes || again.Parts[again.FindPart("leg_front_shin")].Limits != knee.Limits {
 		t.Fatal("joint limits must survive saving")
 	}
 }
@@ -335,8 +335,8 @@ func TestFlippingTwiceGivesTheSameSprite(t *testing.T) {
 		t.Fatal("a flip should change the sprite")
 	}
 	thigh := sheet.Parts[sheet.FindPart("leg_front_thigh")]
-	if thigh.Range != [2]float64{-50, 120} {
-		t.Fatalf("a flipped thigh should swap and negate its limits, got %v", thigh.Range)
+	if thigh.Limits[AxisZ] != (AngleRange{-100, 150}) {
+		t.Fatalf("a flipped thigh should swap and negate its limits, got %v", thigh.Limits[AxisZ])
 	}
 	sheet.FlipSkeleton()
 	if Write(sheet) != before {
@@ -419,14 +419,14 @@ func TestResizingTheCanvasKeepsTheBodyAndReadsBack(t *testing.T) {
 
 func TestClearingPaintKeepsTheSkeleton(t *testing.T) {
 	sheet := paintedHumanoid()
-	sheet.Animations[0].Frames[0].Pixels = make([]uint8, 64*64)
+	sheet.Bake(sheet.Animations[0], 0)
 	sheet.ClearPaint()
 	for _, part := range sheet.Parts {
-		if !pixelBounds(part.Pixels, sheet.Width, sheet.Height).isEmpty() {
+		if !part.Area().isEmpty() {
 			t.Fatalf("%s still has paint", part.Name)
 		}
 	}
-	if len(sheet.Parts) != 13 || sheet.Animations[0].Frames[0].Pixels != nil {
+	if len(sheet.Parts) != 13 || sheet.Animations[0].Frames[0].Baked != nil {
 		t.Fatal("clearing should keep the bones and unbake frames")
 	}
 }

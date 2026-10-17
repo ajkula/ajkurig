@@ -1,4 +1,4 @@
-package editor
+package spriteeditor
 
 import (
 	"fmt"
@@ -27,6 +27,7 @@ type drag struct {
 	twin            int
 	twinStart       sprite.Joint
 	isTipDrag       bool
+	isReaching      bool
 	selectionStart  sprite.Pose
 	startReferenceX float64
 	startReferenceY float64
@@ -40,8 +41,10 @@ const (
 	pivotMarkSize   = 5
 	ghostAlpha      = 0.35
 	boneGrabRange   = 2.5
+	exactBoneRange  = 0.8
 	hangerPriority  = 0.75
 	boneWidth       = 3
+	spinSpeed       = 3
 )
 
 var toolStarts = [...]func(e *Editor){
@@ -53,6 +56,7 @@ var toolStarts = [...]func(e *Editor){
 	ToolHand:   (*Editor).startPan,
 	ToolTrace:  (*Editor).startTrace,
 	ToolPlace:  (*Editor).startPlace,
+	ToolSelect: (*Editor).startSelect,
 }
 
 var toolMoves = [...]func(e *Editor){
@@ -64,13 +68,16 @@ var toolMoves = [...]func(e *Editor){
 	ToolHand:   (*Editor).continuePan,
 	ToolTrace:  (*Editor).continueTrace,
 	ToolPlace:  (*Editor).continuePlace,
+	ToolSelect: (*Editor).continueSelect,
 }
 
-var toolFinishes = [toolCount]func(e *Editor){ToolTrace: (*Editor).finishTrace}
+var previewRenderers = [2]func(e *Editor){(*Editor).renderPreviewFrame, (*Editor).renderPreviewSpin}
+
+var toolFinishes = [toolCount]func(e *Editor){ToolTrace: (*Editor).finishTrace, ToolSelect: (*Editor).finishSelect}
 
 var historyFreeTools = [toolCount]bool{ToolPicker: true, ToolHand: true, ToolTrace: true}
 
-var ghostingTools = [toolCount]bool{ToolPencil: true, ToolFill: true, ToolBone: true}
+var ghostingTools = [toolCount]bool{ToolPencil: true, ToolFill: true, ToolBone: true, ToolSelect: true}
 
 var poseMoves = [2]func(e *Editor, joint sprite.Joint, mouseX, mouseY float64) sprite.Joint{
 	(*Editor).turnedJoint,
@@ -80,6 +87,7 @@ var poseMoves = [2]func(e *Editor, joint sprite.Joint, mouseX, mouseY float64) s
 // ===== Input =====
 
 func (e *Editor) handleCanvas() {
+	e.keepSelectionCurrent()
 	isPressed := (e.ui.IsClickFree() || e.ui.IsRightClicked) && viewRect.Contains(e.ui.MouseX, e.ui.MouseY)
 	if isPressed && e.ui.IsHelping {
 		e.ui.Pick(toolFeatures[e.activeTool()])
@@ -146,6 +154,8 @@ func (e *Editor) paintValue() uint8 {
 
 func (e *Editor) startPaint() {
 	e.drag.lastX, e.drag.lastY = e.mousePixel()
+	e.targetErasedPart(e.drag.lastX, e.drag.lastY)
+	e.ensureFaceView()
 	e.paintPixel(e.drag.lastX, e.drag.lastY, e.paintValue())
 }
 
@@ -162,41 +172,62 @@ func (e *Editor) continuePaint() {
 }
 
 func (e *Editor) paintPixel(x, y int, value uint8) {
-	isInside := x >= 0 && y >= 0 && x < e.sheet.Width && y < e.sheet.Height
-	if !isInside {
-		return
-	}
 	if e.isEditingBakedFrame() {
-		e.currentFrame().Pixels[y*e.sheet.Width+x] = value
+		e.currentFrame().Baked.Set(x, y, value)
 		return
 	}
 	partX, partY := e.toPartSpace(x, y)
 	e.paintLayer().Set(partX, partY, value)
 }
 
+func (e *Editor) targetErasedPart(x, y int) {
+	if !e.ui.IsRightDown || e.isEditingBakedFrame() {
+		return
+	}
+	owner := e.partUnderPixel(x, y)
+	if owner < 0 || owner == e.partIndex {
+		return
+	}
+	e.selectOnly(owner)
+	e.resolvePose()
+	e.notify("Erasing in "+e.currentPart().Name, colorGood)
+}
+
 func (e *Editor) fillAtMouse() {
 	x, y := e.mousePixel()
 	if e.isEditingBakedFrame() {
-		sprite.FloodFill(e.currentFrame().Pixels, e.sheet.Width, e.sheet.Height, x, y, e.paintValue())
+		e.currentFrame().Baked.Fill(x, y, e.paintValue(), e.workArea)
 		return
 	}
+	e.ensureFaceView()
 	partX, partY := e.toPartSpace(x, y)
-	part := e.paintLayer()
-	sprite.FloodFill(part.Pixels, e.sheet.Width, e.sheet.Height, partX, partY, e.paintValue())
-	part.Invalidate()
+	e.paintLayer().Fill(partX, partY, e.paintValue(), e.workAreaInPartSpace())
 }
 
 func (e *Editor) pickAtMouse() {
 	x, y := e.mousePixel()
-	isInside := x >= 0 && y >= 0 && x < e.sheet.Width && y < e.sheet.Height
-	if !isInside {
+	if e.isEditingBakedFrame() {
+		e.colorIndex = e.currentFrame().Baked.At(x, y)
 		return
 	}
-	copy(e.pickPixels, e.composed)
-	if !e.isEditingBakedFrame() {
-		e.sheet.Render(e.pose, e.pickPixels)
+	e.colorIndex = e.renderedPixel(x, y, func(int) bool { return true })
+}
+
+func (e *Editor) renderedPixel(x, y int, isShown func(index int) bool) uint8 {
+	e.sheet.RenderSelectionIn(e.pose, isShown, sprite.Area{X: x, Y: y, Width: 1, Height: 1}, e.onePixel[:])
+	return e.onePixel[0]
+}
+
+func (e *Editor) workAreaInPartSpace() sprite.Area {
+	work := e.workArea
+	inverse := e.transforms[e.partIndex].Inverse()
+	minX, minY, maxX, maxY := math.Inf(1), math.Inf(1), math.Inf(-1), math.Inf(-1)
+	for _, corner := range [4][2]int{{work.X, work.Y}, {work.X + work.Width, work.Y}, {work.X, work.Y + work.Height}, {work.X + work.Width, work.Y + work.Height}} {
+		x, y := inverse.Apply(float64(corner[0]), float64(corner[1]))
+		minX, minY, maxX, maxY = min(minX, x), min(minY, y), max(maxX, x), max(maxY, y)
 	}
-	e.colorIndex = e.pickPixels[y*e.sheet.Width+x]
+	left, top := int(math.Floor(minX)), int(math.Floor(minY))
+	return sprite.Area{X: left, Y: top, Width: int(math.Ceil(maxX)) - left, Height: int(math.Ceil(maxY)) - top}
 }
 
 func (e *Editor) placePivot() {
@@ -263,7 +294,9 @@ func (e *Editor) startPose() {
 		e.notify("Posing works on frames that are not baked, outside the rest view", colorDanger)
 		return
 	}
-	e.grabBoneUnderMouse()
+	e.drag.isReaching = !isShiftHeld() && e.grabLimbEndUnderMouse()
+	e.grabBoneUnlessReaching()
+	e.explainFreePosing()
 	pose := *e.posingTarget()
 	e.drag.selectionStart = slices.Clone(pose)
 	e.drag.twin = e.twinOf(e.partIndex)
@@ -276,17 +309,39 @@ func (e *Editor) startPose() {
 }
 
 func (e *Editor) continuePose() {
+	if e.drag.isReaching {
+		e.continueReach()
+		return
+	}
 	pose := *e.posingTarget()
 	mouseX, mouseY := e.mouseCanvas()
 	moved := poseMoves[mathx.BoolToIndex(e.drag.isShifting)](e, e.drag.startJoint, mouseX, mouseY)
 	pose[e.partIndex] = moved
-	e.applyLink(pose, e.drag.twin, e.drag.twinStart, e.drag.startJoint, moved)
+	e.applyLink(pose, e.partIndex, e.drag.twin, e.drag.twinStart, e.drag.startJoint, moved)
 	e.carrySelection(pose, e.drag.selectionStart, e.drag.startJoint, moved)
+	e.holdPins(pose, -1)
+}
+
+func (e *Editor) continueReach() {
+	pose := *e.posingTarget()
+	mouseX, mouseY := e.mouseCanvas()
+	e.sheet.Reach(pose, e.partIndex, [2]float64{mouseX, mouseY})
+	start := e.drag.selectionStart
+	for _, index := range [2]int{e.currentPart().Parent, e.partIndex} {
+		twin := e.twinOf(index)
+		e.applyLink(pose, index, twin, jointAtOrZero(start, twin), start[index], pose[index])
+	}
+	e.movePin(e.currentPart().Name, e.sheet.BoneEnds(e.sheet.Transforms(pose))[e.partIndex][1])
+	e.holdPins(pose, e.partIndex)
 }
 
 func (e *Editor) boneUnderMouse() int {
+	return e.boneWithin(boneGrabRange)
+}
+
+func (e *Editor) boneWithin(grabRange float64) int {
 	x, y := e.mouseCanvas()
-	best, bestDistance := -1, boneGrabRange
+	best, bestDistance := -1, grabRange
 	for index, ends := range e.grabEnds {
 		distance := sprite.SegmentDistance(x, y, ends) - hangerPriority*float64(mathx.BoolToIndex(e.isHanger(index))) + boneGrabRange*float64(mathx.BoolToIndex(e.isHiddenHanger(index)))
 		best, bestDistance = pickCloser(distance < bestDistance, index, distance, best, bestDistance)
@@ -294,8 +349,45 @@ func (e *Editor) boneUnderMouse() int {
 	return best
 }
 
+func (e *Editor) explainFreePosing() {
+	if e.mode != ModePoses || e.hasPoseNotice {
+		return
+	}
+	e.hasPoseNotice = true
+	e.notify("Step 2 poses a free model for snapshots, the moves do not change. To fix a move, use 4 ANIMATE", colorAccent)
+}
+
+func (e *Editor) grabLimbEndUnderMouse() bool {
+	x, y := e.mouseCanvas()
+	best, bestDistance := -1, boneGrabRange
+	for index, ends := range e.boneEnds {
+		_, isLimb := e.sheet.LimbOf(index)
+		distance := math.Hypot(x-ends[1][0], y-ends[1][1]) + boneGrabRange*float64(mathx.BoolToIndex(!isLimb))
+		best, bestDistance = pickCloser(distance < bestDistance, index, distance, best, bestDistance)
+	}
+	if best < 0 {
+		return false
+	}
+	e.selectOnly(best)
+	e.resolvePose()
+	return true
+}
+
+func (e *Editor) grabBoneUnlessReaching() {
+	if e.drag.isReaching {
+		return
+	}
+	e.grabBoneUnderMouse()
+}
+
 func (e *Editor) grabBoneUnderMouse() {
-	best := e.boneUnderMouse()
+	best := e.boneWithin(exactBoneRange)
+	if best < 0 {
+		best = e.partUnderPixel(e.mousePixel())
+	}
+	if best < 0 {
+		best = e.boneUnderMouse()
+	}
 	if best < 0 {
 		return
 	}
@@ -334,30 +426,55 @@ func (e *Editor) angleFromPivot(x, y float64) float64 {
 
 func (e *Editor) renderImages() {
 	e.composeCurrent()
-	e.sheet.WriteRGBA(e.composed, e.rgba)
-	e.canvasImage.WritePixels(e.rgba)
-	e.sheet.WriteRGBA(e.ghostPixels, e.rgba)
-	e.ghostImage.WritePixels(e.rgba)
+	e.writeImage(e.canvasImage, e.composed)
+	e.writeImage(e.ghostImage, e.ghostPixels)
 	animation := e.currentAnimation()
 	count := len(animation.Frames)
-	e.sheet.RenderFrame(animation, (e.frameIndex-1+count)%count, e.onionPixels)
-	e.sheet.WriteRGBA(e.onionPixels, e.rgba)
-	e.onionImage.WritePixels(e.rgba)
+	e.sheet.RenderFrameIn(animation, (e.frameIndex-1+count)%count, e.workArea, e.onionPixels)
+	e.writeImage(e.onionImage, e.onionPixels)
 	e.previewTick += mathx.BoolToIndex(e.isPreviewPlaying)
-	e.sheet.RenderFrame(animation, animation.FrameAt(e.previewTick), e.previewPixels)
-	e.sheet.WriteRGBA(e.previewPixels, e.rgba)
-	e.previewImage.WritePixels(e.rgba)
+	previewRenderers[mathx.BoolToIndex(e.isSpinning())](e)
+	e.writeImage(e.preview.image, e.preview.pixels)
+}
+
+func (e *Editor) renderPreviewFrame() {
+	animation := e.currentAnimation()
+	e.preview.frame(e.sheet.Canvas().Union(e.sheet.AnimationArea(animation)))
+	e.sheet.RenderFrameIn(animation, animation.FrameAt(e.previewTick), e.preview.area, e.preview.pixels)
+}
+
+func (e *Editor) renderPreviewSpin() {
+	pose := e.previewPose()
+	e.preview.frame(e.sheet.Canvas().Union(e.sheet.PoseArea(pose)))
+	e.sheet.RenderSelectionIn(pose, func(index int) bool { return index == e.partIndex }, e.preview.area, e.preview.pixels)
+}
+
+func (e *Editor) previewPose() sprite.Pose {
+	pose := e.sheet.Grow(nil)
+	pose[e.partIndex].Turn = float64(e.previewTick * spinSpeed % 360)
+	return pose
+}
+
+func (e *Editor) isSpinning() bool {
+	return e.mode == ModeDraw && e.currentPart().IsSolid
+}
+
+func (e *Editor) previewTitle(animation *sprite.Animation, frame int) string {
+	if e.isSpinning() {
+		return "PREVIEW  " + e.currentPart().Name + " turning as a volume"
+	}
+	return fmt.Sprintf("PREVIEW  %s  (frame %d of %d)", animation.Name, frame+1, len(animation.Frames))
 }
 
 func (e *Editor) composeCurrent() {
 	clear(e.ghostPixels)
 	if e.isEditingBakedFrame() {
-		copy(e.composed, e.currentFrame().Pixels)
+		e.sheet.RenderFrameIn(e.currentAnimation(), e.frameIndex, e.workArea, e.composed)
 		return
 	}
-	e.sheet.RenderSelection(e.pose, e.isPartShown, e.composed)
+	e.sheet.RenderSelectionIn(e.pose, e.isPartShown, e.workArea, e.composed)
 	if e.isGhosting() {
-		e.sheet.RenderSelection(e.pose, e.isGhostPart, e.ghostPixels)
+		e.sheet.RenderSelectionIn(e.pose, e.isGhostPart, e.workArea, e.ghostPixels)
 	}
 }
 
@@ -375,15 +492,19 @@ func (e *Editor) isGhostPart(index int) bool {
 
 func (e *Editor) layoutCanvas() {
 	e.ui.Clip(viewRect)
-	e.ui.Image(e.canvasRect, e.checkerImage, 1)
+	work := e.workRect()
+	e.ui.Image(e.checkerRect(), e.checkerImage, 1)
 	e.layoutReference()
 	isOnionShown := e.isOnion && !e.isRestView && len(e.currentAnimation().Frames) > 1
-	e.ui.Image(e.canvasRect, e.onionImage, onionAlpha*float32(mathx.BoolToIndex(isOnionShown)))
-	e.ui.Image(e.canvasRect, e.ghostImage, ghostAlpha)
-	e.ui.Image(e.canvasRect, e.canvasImage, 1)
+	e.ui.Image(work, e.onionImage, onionAlpha*float32(mathx.BoolToIndex(isOnionShown)))
+	e.ui.Image(work, e.ghostImage, ghostAlpha)
+	e.ui.Image(work, e.canvasImage, 1)
 	e.layoutGrid()
+	e.layoutSelection()
 	e.layoutBones()
 	e.layoutPivots()
+	e.layoutPins()
+	e.layoutViewMarker()
 	e.ui.Outline(Rect{e.canvasRect.X - 1, e.canvasRect.Y - 1, e.canvasRect.W + 2, e.canvasRect.H + 2}, colorEdge)
 	e.ui.Unclip()
 }
@@ -392,11 +513,12 @@ func (e *Editor) layoutGrid() {
 	if e.zoom < gridMinimumZoom {
 		return
 	}
-	for x := range e.sheet.Width + 1 {
-		e.ui.Fill(Rect{e.canvasRect.X + float32(x)*e.zoom, e.canvasRect.Y, 1, e.canvasRect.H}, colorGrid)
+	work := e.workRect()
+	for x := range e.workArea.Width + 1 {
+		e.ui.Fill(Rect{work.X + float32(x)*e.zoom, work.Y, 1, work.H}, colorGrid)
 	}
-	for y := range e.sheet.Height + 1 {
-		e.ui.Fill(Rect{e.canvasRect.X, e.canvasRect.Y + float32(y)*e.zoom, e.canvasRect.W, 1}, colorGrid)
+	for y := range e.workArea.Height + 1 {
+		e.ui.Fill(Rect{work.X, work.Y + float32(y)*e.zoom, work.W, 1}, colorGrid)
 	}
 }
 
@@ -450,7 +572,7 @@ func pickCloser(isCloser bool, index int, distance float64, best int, bestDistan
 }
 
 func (e *Editor) cursorDescription() string {
-	if !e.canvasRect.Contains(e.ui.MouseX, e.ui.MouseY) {
+	if !viewRect.Contains(e.ui.MouseX, e.ui.MouseY) {
 		return ""
 	}
 	x, y := e.mousePixel()

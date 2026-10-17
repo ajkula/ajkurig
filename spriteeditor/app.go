@@ -1,4 +1,4 @@
-package editor
+package spriteeditor
 
 import (
 	"errors"
@@ -23,6 +23,12 @@ import (
 
 // ===== Types =====
 
+type framedImage struct {
+	area   sprite.Area
+	pixels []uint8
+	image  *ebiten.Image
+}
+
 type Tool uint8
 
 type LinkMode uint8
@@ -37,6 +43,10 @@ type Editor struct {
 	ui               *UI
 	sheet            *sprite.Sheet
 	path             string
+	projectRoot      string
+	pendingPath      string
+	isClosing        bool
+	isQuitting       bool
 	modified         time.Time
 	isDirty          bool
 	isBroken         bool
@@ -61,34 +71,37 @@ type Editor struct {
 	link             LinkMode
 	boneEnds         [][2][2]float64
 	ghostPixels      []uint8
-	pickPixels       []uint8
+	onePixel         [1]uint8
 	ghostImage       *ebiten.Image
 	isPreviewPlaying bool
 	previewTick      int
 	drag             drag
+	selection        pixelSelection
+	hasPoseNotice    bool
 	pose             sprite.Pose
 	transforms       []sprite.Affine
-	layers           []*sprite.Part
+	layers           []*sprite.Layer
 	facings          []float64
 	drawTurn         float64
+	drawTilt         float64
 	workPose         sprite.Pose
+	pins             []pin
 	selected         []bool
 	snapshotIndex    int
 	isPuttingOnFrame bool
 	isSmoothing      bool
 	isHangers        bool
-	thumbImages      []*ebiten.Image
-	thumbPixels      []uint8
+	thumbnails       []*framedImage
 	grabEnds         [][2][2]float64
 	composed         []uint8
 	onionPixels      []uint8
-	previewPixels    []uint8
+	preview          framedImage
 	rgba             []byte
 	canvasImage      *ebiten.Image
 	onionImage       *ebiten.Image
-	previewImage     *ebiten.Image
 	checkerImage     *ebiten.Image
 	canvasRect       Rect
+	workArea         sprite.Area
 	zoom             float32
 	viewX            float32
 	viewY            float32
@@ -116,6 +129,7 @@ const (
 	ToolHand
 	ToolTrace
 	ToolPlace
+	ToolSelect
 	toolCount
 )
 
@@ -139,17 +153,18 @@ const (
 	canvasHeight   = 626
 )
 
-var toolNames = [...]string{ToolPencil: "PENCIL", ToolFill: "FILL", ToolPicker: "PICK", ToolBone: "BONE", ToolPose: "POSE", ToolHand: "HAND", ToolTrace: "TRACE", ToolPlace: "PLACE"}
+var toolNames = [...]string{ToolPencil: "PENCIL", ToolFill: "FILL", ToolPicker: "PICK", ToolBone: "BONE", ToolPose: "POSE", ToolHand: "HAND", ToolTrace: "TRACE", ToolPlace: "PLACE", ToolSelect: "SELECT"}
 
 var toolHints = [...]string{
-	ToolPencil: "B  Left paints, right erases. On a baked frame it paints the frame, otherwise the selected part",
+	ToolPencil: "B  Left paints the selected part, right erases whatever is under the cursor. On a baked frame it paints the frame",
 	ToolFill:   "G  Fills the area under the cursor, right click fills with transparency",
 	ToolPicker: "I  Picks the colour under the cursor (hold Alt with any tool)",
 	ToolBone:   "V  Grab the end of a bone to lengthen it (the rest of the limb follows), or press elsewhere to place a new joint and drag to its end",
-	ToolPose:   "R  Grab a bone and drag to turn it around its joint, Shift+drag moves it",
+	ToolPose:   "R  Grab a bone or the limb drawn around it and drag to turn it, grab the end of a hand or foot to pull the whole limb, Shift+drag moves it",
 	ToolHand:   "P  Drag to move the view. The wheel zooms, the middle button moves the view with any tool",
 	ToolPlace:  "N  Drag to move the whole body, bones and paint together",
 	ToolTrace:  "F  Drag the reference picture to place it, the wheel resizes it. Drop a picture on the window to load one",
+	ToolSelect: "C  Drag a box over pixels, then drag the box to move them. Delete erases them",
 }
 
 var shortcuts = []shortcut{
@@ -165,6 +180,8 @@ var shortcuts = []shortcut{
 	{ebiten.KeyP, false, func(e *Editor) { e.selectTool(ToolHand) }},
 	{ebiten.KeyF, false, func(e *Editor) { e.selectTool(ToolTrace) }},
 	{ebiten.KeyN, false, func(e *Editor) { e.selectTool(ToolPlace) }},
+	{ebiten.KeyC, false, func(e *Editor) { e.selectTool(ToolSelect) }},
+	{ebiten.KeyDelete, false, (*Editor).deleteSelection},
 	{ebiten.KeyEqual, false, func(e *Editor) { e.zoomAtCenter(1) }},
 	{ebiten.KeyNumpadAdd, false, func(e *Editor) { e.zoomAtCenter(1) }},
 	{ebiten.KeyMinus, false, func(e *Editor) { e.zoomAtCenter(-1) }},
@@ -198,11 +215,20 @@ var canvasHandlers = [2]func(e *Editor){(*Editor).handleViewAndCanvas, func(*Edi
 // ===== Public API =====
 
 func New(path string, width, height int) *Editor {
-	editor := &Editor{ui: NewUI(), path: path, colorIndex: 1, isPreviewPlaying: true, isGhost: true, isBones: true, isSmoothing: true, isHangers: true, link: LinkMirror, messageColor: colorGood}
+	editor := &Editor{ui: NewUI(), path: path, projectRoot: filepath.Dir(path), colorIndex: 1, isPreviewPlaying: true, isGhost: true, isBones: true, isSmoothing: true, isHangers: true, link: LinkOff, messageColor: colorGood}
 	editor.loadOrCreate(width, height)
 	editor.setMode(ModeSkeleton)
 	editor.restoreReference()
 	return editor
+}
+
+func ConfigureWindow() {
+	monitorWidth, monitorHeight := ebiten.Monitor().Size()
+	scale := min(1, float64(monitorWidth)*0.94/LogicalWidth, float64(monitorHeight)*0.9/LogicalHeight)
+	ebiten.SetWindowSize(int(LogicalWidth*scale), int(LogicalHeight*scale))
+	ebiten.SetWindowResizingMode(ebiten.WindowResizingModeEnabled)
+	ebiten.SetWindowClosingHandled(true)
+	ebiten.SetWindowTitle("ajkurig Sprite Editor")
 }
 
 type Opening struct {
@@ -210,11 +236,12 @@ type Opening struct {
 	Move string
 	Part string
 	Turn float64
+	Tilt float64
 }
 
 func (e *Editor) Open(opening Opening) {
 	e.setMode(Mode(mathx.ClampInt(opening.Step-1, 0, int(modeCount)-1)))
-	e.drawTurn = normalizeAngle(opening.Turn)
+	e.drawTurn, e.drawTilt = normalizeAngle(opening.Turn), normalizeAngle(opening.Tilt)
 	for index, animation := range e.sheet.Animations {
 		if animation.Name == opening.Move {
 			e.selectAnimation(index)
@@ -230,9 +257,17 @@ func (e *Editor) SetSnapshot(path string) {
 	e.snapshotPath = path
 }
 
+func (e *Editor) SetProjectRoot(root string) {
+	e.projectRoot = root
+}
+
 func (e *Editor) Update() error {
-	if e.snapshotPath != "" && e.snapshotTicks > snapshotDelay {
+	isFinished := e.snapshotPath != "" && e.snapshotTicks > snapshotDelay
+	if isFinished || e.isQuitting {
 		return ebiten.Termination
+	}
+	if ebiten.IsWindowBeingClosed() {
+		e.RequestClose()
 	}
 	e.ui.Begin()
 	e.messageTicks = max(0, e.messageTicks-1)
@@ -426,15 +461,32 @@ func (e *Editor) setSheet(sheet *sprite.Sheet) {
 }
 
 func (e *Editor) allocateImages() {
-	width, height := e.sheet.Width, e.sheet.Height
-	e.composed, e.onionPixels, e.previewPixels = make([]uint8, width*height), make([]uint8, width*height), make([]uint8, width*height)
-	e.ghostPixels, e.pickPixels = make([]uint8, width*height), make([]uint8, width*height)
-	e.ghostImage = ebiten.NewImage(width, height)
-	e.rgba = make([]byte, width*height*4)
-	e.canvasImage, e.onionImage, e.previewImage = ebiten.NewImage(width, height), ebiten.NewImage(width, height), ebiten.NewImage(width, height)
-	e.checkerImage = newChecker(width, height)
-	e.thumbImages, e.thumbPixels = nil, make([]uint8, width*height)
+	e.preview, e.thumbnails = framedImage{}, nil
+	e.preview.frame(e.sheet.Canvas())
 	e.fitView()
+}
+
+func (e *Editor) allocateWork() {
+	width, height := e.workArea.Width, e.workArea.Height
+	e.composed, e.ghostPixels, e.onionPixels = make([]uint8, width*height), make([]uint8, width*height), make([]uint8, width*height)
+	e.canvasImage, e.ghostImage, e.onionImage = ebiten.NewImage(width, height), ebiten.NewImage(width, height), ebiten.NewImage(width, height)
+	e.checkerImage = newChecker(width+checkerPeriod, height+checkerPeriod)
+}
+
+func (f *framedImage) frame(area sprite.Area) {
+	isSameSize := f.image != nil && area.Width == f.area.Width && area.Height == f.area.Height
+	f.area = area
+	if isSameSize {
+		return
+	}
+	f.pixels, f.image = make([]uint8, area.Width*area.Height), ebiten.NewImage(area.Width, area.Height)
+}
+
+func (e *Editor) writeImage(image *ebiten.Image, pixels []uint8) {
+	size := len(pixels) * 4
+	e.rgba = slices.Grow(e.rgba[:0], size)[:size]
+	e.sheet.WriteRGBA(pixels, e.rgba)
+	image.WritePixels(e.rgba)
 }
 
 func (e *Editor) currentAnimation() *sprite.Animation {
@@ -450,11 +502,11 @@ func (e *Editor) currentPart() *sprite.Part {
 }
 
 func (e *Editor) isEditingBakedFrame() bool {
-	return e.mode != ModePoses && !e.isRestView && e.currentFrame().Pixels != nil
+	return e.mode != ModePoses && !e.isRestView && e.currentFrame().Baked != nil
 }
 
 func (e *Editor) isPosable() bool {
-	return e.mode == ModePoses || !e.isRestView && e.currentFrame().Pixels == nil
+	return e.mode == ModePoses || !e.isRestView && e.currentFrame().Baked == nil
 }
 
 func (e *Editor) resolvePose() {
@@ -502,10 +554,13 @@ func (e *Editor) nudge(angle float64, shiftX, shiftY int) {
 	start := slices.Clone(pose)
 	twin := e.twinOf(e.partIndex)
 	primary := pose[e.partIndex]
-	moved := sprite.Joint{Angle: e.limitAngle(e.partIndex, primary.Angle+angle), Shift: sprite.Point{X: primary.Shift.X + shiftX, Y: primary.Shift.Y + shiftY}, Turn: primary.Turn, Drawing: primary.Drawing}
+	moved := primary
+	moved.Angle = e.limitAngle(e.partIndex, primary.Angle+angle)
+	moved.Shift = sprite.Point{X: primary.Shift.X + shiftX, Y: primary.Shift.Y + shiftY}
 	pose[e.partIndex] = moved
-	e.applyLink(pose, twin, jointAtOrZero(start, twin), primary, moved)
+	e.applyLink(pose, e.partIndex, twin, jointAtOrZero(start, twin), primary, moved)
 	e.carrySelection(pose, start, primary, moved)
+	e.holdPins(pose, -1)
 }
 
 func (e *Editor) twinOf(index int) int {
@@ -515,23 +570,21 @@ func (e *Editor) twinOf(index int) int {
 	return e.sheet.Counterpart(index)
 }
 
-func (e *Editor) applyLink(pose sprite.Pose, twin int, twinStart, start, moved sprite.Joint) {
+func (e *Editor) applyLink(pose sprite.Pose, index, twin int, twinStart, start, moved sprite.Joint) {
 	if twin < 0 {
 		return
 	}
-	isSwinging := e.link == LinkMirror && e.sheet.Parts[twin].Parent == e.currentPart().Parent
+	isSwinging := e.link == LinkMirror && e.sheet.Parts[twin].Parent == e.sheet.Parts[index].Parent
 	direction := [2]float64{1, -1}[mathx.BoolToIndex(isSwinging)]
 	shares := mathx.BoolToIndex(e.link == LinkSame)
-	pose[twin] = sprite.Joint{
-		Angle:   e.limitAngle(twin, twinStart.Angle+(moved.Angle-start.Angle)*direction),
-		Shift:   sprite.Point{X: twinStart.Shift.X + (moved.Shift.X-start.Shift.X)*shares, Y: twinStart.Shift.Y + (moved.Shift.Y-start.Shift.Y)*shares},
-		Turn:    twinStart.Turn,
-		Drawing: twinStart.Drawing,
-	}
+	linked := twinStart
+	linked.Angle = e.limitAngle(twin, twinStart.Angle+(moved.Angle-start.Angle)*direction)
+	linked.Shift = sprite.Point{X: twinStart.Shift.X + (moved.Shift.X-start.Shift.X)*shares, Y: twinStart.Shift.Y + (moved.Shift.Y-start.Shift.Y)*shares}
+	pose[twin] = linked
 }
 
 func (e *Editor) limitAngle(index int, angle float64) float64 {
-	return e.sheet.Parts[index].Limit(normalizeAngle(angle))
+	return normalizeAngle(e.sheet.Parts[index].Limit(sprite.AxisZ, angle))
 }
 
 func jointAtOrZero(pose sprite.Pose, index int) sprite.Joint {
@@ -570,7 +623,7 @@ func newChecker(width, height int) *ebiten.Image {
 	pixels := make([]byte, width*height*4)
 	tints := [2]color.NRGBA{colorCheckerA, colorCheckerB}
 	for index := range width * height {
-		tint := tints[(index%width/2+index/width/2)%2]
+		tint := tints[(index%width/(checkerPeriod/2)+index/width/(checkerPeriod/2))%2]
 		pixels[index*4], pixels[index*4+1], pixels[index*4+2], pixels[index*4+3] = tint.R, tint.G, tint.B, 255
 	}
 	image := ebiten.NewImage(width, height)

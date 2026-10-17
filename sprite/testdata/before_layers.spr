@@ -1,0 +1,382 @@
+sprite fixture
+size 64 64
+color k 272932
+color r 710000
+color y fdf500
+color g 1ac5b0
+color b 37ebf3
+color p 9370db
+color f e455ae
+color m cb1dcd
+color s d1c5c0
+
+part leg_back_thigh
+parent pelvis
+pivot 31 33
+tip 31 46
+limit -120 50
+pixels 28 33
+k
+.k
+..k
+...k
+....k
+.....k
+end
+
+part leg_back_shin
+parent leg_back_thigh
+pivot 31 46
+tip 31 60
+limit 0 150
+pixels 28 46
+r
+.r
+..r
+...r
+....r
+.....r
+end
+
+part arm_back_upper
+parent shoulders
+pivot 28 16
+tip 28 26
+limit -180 70
+pixels 25 16
+y
+.y
+..y
+...y
+....y
+.....y
+end
+
+part arm_back_fore
+parent arm_back_upper
+pivot 28 26
+tip 28 35
+limit -150 0
+pixels 25 26
+g
+.g
+..g
+...g
+....g
+.....g
+end
+
+part hips
+parent none
+pivot 32 33
+tip 32 35
+limit -180 180
+pixels 29 33
+b
+.b
+..b
+...b
+....b
+.....b
+end
+
+part leg_front_thigh
+parent pelvis
+pivot 33 33
+tip 33 46
+limit -120 50
+pixels 30 33
+p
+.p
+..p
+...p
+....p
+.....p
+end
+
+part leg_front_shin
+parent leg_front_thigh
+pivot 33 46
+tip 33 60
+limit 0 150
+pixels 30 46
+f
+.f
+..f
+...f
+....f
+.....f
+end
+
+part torso
+parent hips
+pivot 32 32
+tip 32 14
+limit -35 50
+pixels 29 32
+m
+.m
+..m
+...m
+....m
+.....m
+end
+view 90
+pixels 31 33
+m
+
+.m
+
+..m
+end
+view 45 side
+pixels 10 10
+y
+end
+
+part head
+parent torso
+pivot 32 13
+tip 32 3
+limit -35 35
+pixels 29 13
+s
+.s
+..s
+...s
+....s
+.....s
+end
+
+part arm_front_upper
+parent shoulders
+pivot 35 16
+tip 35 26
+limit -180 70
+pixels 32 16
+k
+.k
+..k
+...k
+....k
+.....k
+end
+
+part arm_front_fore
+parent arm_front_upper
+pivot 35 26
+tip 35 35
+limit -150 0
+pixels 32 26
+r
+.r
+..r
+...r
+....r
+.....r
+end
+
+part shoulders
+parent torso
+pivot 32 16
+tip 32 16
+limit -45 45
+pixels 29 16
+y
+.y
+..y
+...y
+....y
+.....y
+end
+
+part pelvis
+parent hips
+pivot 32 33
+tip 32 33
+limit -35 35
+pixels 29 33
+g
+.g
+..g
+...g
+....g
+.....g
+end
+
+anim idle loop
+frame key 14
+pose arm_back_upper 10 0 0
+pose arm_back_fore -15 0 0
+pose arm_front_upper -10 0 0
+pose arm_front_fore -15 0 0
+pixels 23 13
+......s
+.......s
+........s
+..yy..y..s
+...y...y.kk
+....y...y..kk
+....yy...y..kk
+.....y....y..kk
+......y....y...k
+
+
+
+
+gg
+.gg........rr
+..gg........rrrr
+...gg..........rrr
+.....g
+......g
+......m
+.....kgp
+......kgp
+.......kgp
+........kgp
+.........kgp
+..........kgp
+
+
+
+
+
+
+
+.....r.f
+......r.f
+.......r.f
+........r.f
+.........r.f
+..........r.f
+end
+frame tween 8
+frame key 14
+pose arm_back_upper 12 0 0
+pose arm_back_fore -20 0 0
+pose torso 0 0 1
+pose arm_front_upper -12 0 0
+pose arm_front_fore -20 0 0
+frame tween 8
+
+anim walk loop
+frame key 6
+pose leg_back_thigh 25 0 0
+pose leg_back_shin 20 0 0
+pose arm_back_upper -25 0 0
+pose arm_back_fore -30 0 0
+pose hips 0 0 1
+pose leg_front_thigh -25 0 0
+pose leg_front_shin 10 0 0
+pose arm_front_upper 20 0 0
+pose arm_front_fore -20 0 0
+frame tween 5
+frame key 6
+pose leg_back_thigh -25 0 0
+pose leg_back_shin 10 0 0
+pose arm_back_upper 20 0 0
+pose arm_back_fore -20 0 0
+pose hips 0 0 1
+pose leg_front_thigh 25 0 0
+pose leg_front_shin 20 0 0
+pose arm_front_upper -25 0 0
+pose arm_front_fore -30 0 0
+frame tween 5
+
+anim punch once
+frame key 4
+pose leg_back_thigh 10 0 0
+pose arm_back_upper -20 0 0
+pose arm_back_fore -110 0 0
+pose leg_front_thigh -10 0 0
+pose torso 5 0 0
+pose arm_front_upper -35 0 0
+pose arm_front_fore -105 0 0
+frame tween 2
+frame key 8
+pose leg_back_thigh 15 0 0
+pose arm_back_upper -10 0 0
+pose arm_back_fore -120 0 0
+pose leg_front_thigh -15 0 0
+pose torso 12 0 0
+pose head -8 0 0
+pose arm_front_upper -88 0 0
+pose arm_front_fore -2 0 0
+frame tween 3
+frame key 6
+pose leg_back_thigh 10 0 0
+pose arm_back_upper -20 0 0
+pose arm_back_fore -110 0 0
+pose leg_front_thigh -10 0 0
+pose torso 5 0 0
+pose arm_front_upper -35 0 0
+pose arm_front_fore -105 0 0
+
+anim kick once
+frame key 4
+pose arm_back_upper 10 0 0
+pose arm_back_fore -15 0 0
+pose arm_front_upper -10 0 0
+pose arm_front_fore -15 0 0
+frame tween 3
+frame key 4
+pose arm_back_upper 20 0 0
+pose arm_back_fore -90 0 0
+pose leg_front_thigh -95 0 0
+pose leg_front_shin 100 0 0
+pose torso -8 0 0
+pose head 6 0 0
+pose arm_front_upper -40 0 0
+pose arm_front_fore -100 0 0
+frame tween 2
+frame key 10
+pose leg_back_thigh 5 0 0
+pose arm_back_upper 30 0 0
+pose arm_back_fore -60 0 0
+pose leg_front_thigh -88 0 0
+pose torso -18 0 0
+pose head 12 0 0
+pose arm_front_upper -30 0 0
+pose arm_front_fore -90 0 0
+frame tween 3
+frame key 4
+pose arm_back_upper 20 0 0
+pose arm_back_fore -90 0 0
+pose leg_front_thigh -95 0 0
+pose leg_front_shin 100 0 0
+pose torso -8 0 0
+pose head 6 0 0
+pose arm_front_upper -40 0 0
+pose arm_front_fore -100 0 0
+frame tween 3
+frame key 4
+pose arm_back_upper 10 0 0
+pose arm_back_fore -15 0 0
+pose arm_front_upper -10 0 0
+pose arm_front_fore -15 0 0
+
+anim hurt once
+frame key 3
+pose arm_back_upper 10 0 0
+pose arm_back_fore -15 0 0
+pose arm_front_upper -10 0 0
+pose arm_front_fore -15 0 0
+frame key 10
+pose leg_back_thigh 20 0 0
+pose leg_back_shin 25 0 0
+pose arm_back_upper 55 0 0
+pose arm_back_fore -30 0 0
+pose hips 0 -2 1
+pose leg_front_thigh -15 0 0
+pose leg_front_shin 20 0 0
+pose torso -25 0 0
+pose head -30 0 0
+pose arm_front_upper 40 0 0
+pose arm_front_fore -40 0 0
+frame tween 6
+frame key 4
+pose arm_back_upper 10 0 0
+pose arm_back_fore -15 0 0
+pose arm_front_upper -10 0 0
+pose arm_front_fore -15 0 0
