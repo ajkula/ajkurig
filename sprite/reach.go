@@ -70,7 +70,7 @@ func (s *Sheet) turnBone(pose Pose, index int, radians float64) {
 		return
 	}
 	degrees := math.Remainder(radians*180/math.Pi, 360) * math.Copysign(1, facing)
-	pose[index].Angle = math.Round(math.Remainder(s.Parts[index].Limit(AxisZ, pose[index].Angle+degrees), 360)*10) / 10
+	s.Parts[index].Rotate(&pose[index], AxisZ, pose[index].Angle+degrees)
 }
 
 func (s *Sheet) boneEnd(index int, isTip bool) [2]float64 {

@@ -1,6 +1,9 @@
 package sprite
 
-import "slices"
+import (
+	"math"
+	"slices"
+)
 
 // ===== Types =====
 
@@ -25,9 +28,12 @@ const (
 )
 
 const (
-	everyAxis = 1<<axisCount - 1
-	fullTurn  = 360
+	everyAxis      = 1<<axisCount - 1
+	fullTurn       = 360
+	tenthsOfDegree = 10
 )
+
+var axisNames = [axisCount]string{AxisX: "x", AxisY: "y", AxisZ: "z"}
 
 var (
 	freeJoint = JointLimits{{-180, 180}, {-180, 180}, {-180, 180}}
@@ -137,6 +143,21 @@ func (p *Part) Limit(axis Axis, angle float64) float64 {
 func (p *Part) SetLimit(axis Axis, limits AngleRange) {
 	p.Limits[axis] = limits
 	p.LimitedAxes |= 1 << axis
+}
+
+func (p *Part) Rotate(joint *Joint, axis Axis, degrees float64) float64 {
+	applied := math.Round(math.Remainder(p.Limit(axis, degrees), fullTurn)*tenthsOfDegree) / tenthsOfDegree
+	*joint.Rotation(axis) = applied
+	return applied
+}
+
+func AxisNamed(name string) (Axis, bool) {
+	axis, isAxis := axisByName[name]
+	return axis, isAxis
+}
+
+func (a Axis) String() string {
+	return axisNames[a]
 }
 
 // ===== Internal =====

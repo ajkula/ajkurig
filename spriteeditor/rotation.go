@@ -94,7 +94,7 @@ func (e *Editor) layoutAxisRow(y float32, row axisRow) float32 {
 }
 
 func (e *Editor) setRotation(joint *sprite.Joint, axis sprite.Axis, degrees float64) {
-	*joint.Rotation(axis) = normalizeAngle(e.currentPart().Limit(axis, degrees))
+	e.currentPart().Rotate(joint, axis, degrees)
 }
 
 func (e *Editor) rotationText(axis sprite.Axis) string {

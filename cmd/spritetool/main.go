@@ -8,10 +8,12 @@ import (
 	"image/color"
 	"image/draw"
 	"image/png"
+	"io"
 	"log"
 	"math"
 	"os"
 	"strconv"
+	"strings"
 
 	"github.com/ajkula/ajkurig/sprite"
 )
@@ -20,12 +22,20 @@ import (
 
 type command struct {
 	usage string
-	run   func(arguments []string) error
+	run   func(arguments []string, out io.Writer) error
 }
 
 type cell struct {
 	pixels []uint8
 	area   sprite.Area
+}
+
+type access func(sheet *sprite.Sheet, arguments []string, out io.Writer) error
+
+type rotationChange struct {
+	part    int
+	axis    sprite.Axis
+	degrees float64
 }
 
 // ===== Constants =====
@@ -50,7 +60,17 @@ var commands = map[string]command{
 	"depth":      {"depth hero.spr part depth [part depth...]", runDepth},
 	"parts":      {"parts [-scale 4] hero.spr out.png", runParts},
 	"bones":      {"bones hero.spr [move frame]", runBones},
+	"get":        {"get part hero.spr part | get pose hero.spr move frame", runGet},
+	"set":        {"set pose hero.spr move frame part x|y|z degrees [part axis degrees...]", runSet},
 }
+
+var getters = map[string]access{"part": getPart, "pose": getPose}
+
+var setters = map[string]access{"pose": setPose}
+
+var poseAxes = []sprite.Axis{sprite.AxisZ, sprite.AxisX, sprite.AxisY}
+
+var solidWords = map[bool]string{false: "no", true: "yes"}
 
 // ===== Public API =====
 
@@ -64,14 +84,14 @@ func main() {
 		printUsage()
 		os.Exit(2)
 	}
-	if err := chosen.run(os.Args[2:]); err != nil {
+	if err := chosen.run(os.Args[2:], os.Stdout); err != nil {
 		log.Fatalf("%s: %v\nusage: spritetool %s", os.Args[1], err, chosen.usage)
 	}
 }
 
 // ===== Commands =====
 
-func runMoves(arguments []string) error {
+func runMoves(arguments []string, _ io.Writer) error {
 	flags := flag.NewFlagSet("moves", flag.ContinueOnError)
 	scale := flags.Int("scale", 4, "size of one sprite pixel")
 	wrap := flags.Int("wrap", 0, "frames per line before wrapping, 0 keeps one line per move")
@@ -108,7 +128,7 @@ func runMoves(arguments []string) error {
 	return save(flags.Arg(1), drawRows(sheet, rows, marks, max(1, *scale)))
 }
 
-func runTurnaround(arguments []string) error {
+func runTurnaround(arguments []string, _ io.Writer) error {
 	flags := flag.NewFlagSet("turnaround", flag.ContinueOnError)
 	scale := flags.Int("scale", 4, "size of one sprite pixel")
 	step := flags.Float64("step", turnaroundCut, "degrees between two turns")
@@ -136,7 +156,7 @@ func runTurnaround(arguments []string) error {
 	return save(flags.Arg(1), drawRows(sheet, [][]cell{row}, [][]bool{make([]bool, len(row))}, max(1, *scale)))
 }
 
-func runCompose(arguments []string) error {
+func runCompose(arguments []string, out io.Writer) error {
 	flags := flag.NewFlagSet("compose", flag.ContinueOnError)
 	split := flags.Int("split", splitTicks, "longest tween kept in one piece, 0 keeps them whole")
 	if err := flags.Parse(arguments); err != nil || flags.NArg() != 2 {
@@ -163,12 +183,12 @@ func runCompose(arguments []string) error {
 			sheet.SplitTweens(animation, *split)
 		}
 		sheet.ReplaceAnimation(animation)
-		fmt.Printf("%s: %d frames, %d ticks\n", animation.Name, len(animation.Frames), animation.Duration())
+		fmt.Fprintf(out, "%s: %d frames, %d ticks\n", animation.Name, len(animation.Frames), animation.Duration())
 	}
 	return store(flags.Arg(0), sheet)
 }
 
-func runView(arguments []string) error {
+func runView(arguments []string, _ io.Writer) error {
 	if len(arguments) < 5 {
 		return errors.New("needs a sprite, a part, a turn, the turn to copy from and mirror or keep")
 	}
@@ -187,7 +207,7 @@ func runView(arguments []string) error {
 	return store(arguments[0], sheet)
 }
 
-func runDepth(arguments []string) error {
+func runDepth(arguments []string, _ io.Writer) error {
 	if len(arguments) < 3 || len(arguments)%2 == 0 {
 		return errors.New("needs a sprite then pairs of part and depth")
 	}
@@ -206,7 +226,7 @@ func runDepth(arguments []string) error {
 	return store(arguments[0], sheet)
 }
 
-func runBones(arguments []string) error {
+func runBones(arguments []string, out io.Writer) error {
 	if len(arguments) != 1 && len(arguments) != 3 {
 		return errors.New("needs a sprite, then optionally a move and a frame index")
 	}
@@ -227,16 +247,35 @@ func runBones(arguments []string) error {
 	facings, depths := sheet.Facings(pose), sheet.Depths(pose)
 	anchorX, anchorY := sheet.Anchor()
 	massX, massY := sheet.CenterOfMass(pose)
-	fmt.Printf("anchor %.1f %.1f, centre of mass %.1f %.1f\n", anchorX, anchorY, massX, massY)
+	fmt.Fprintf(out, "anchor %.1f %.1f, centre of mass %.1f %.1f\n", anchorX, anchorY, massX, massY)
 	for index, part := range sheet.Parts {
 		end := ends[index]
 		direction := math.Atan2(end[1][1]-end[0][1], end[1][0]-end[0][0]) * 180 / math.Pi
-		fmt.Printf("%-16s pivot %6.1f %6.1f  tip %6.1f %6.1f  direction %7.1f  facing %7.1f  depth %6.1f\n", part.Name, end[0][0], end[0][1], end[1][0], end[1][1], direction, facings[index], depths[index])
+		fmt.Fprintf(out, "%-16s pivot %6.1f %6.1f  tip %6.1f %6.1f  direction %7.1f  facing %7.1f  depth %6.1f\n", part.Name, end[0][0], end[0][1], end[1][0], end[1][1], direction, facings[index], depths[index])
 	}
 	return nil
 }
 
-func runParts(arguments []string) error {
+func runGet(arguments []string, out io.Writer) error {
+	sheet, chosen, err := prepareAccess(getters, arguments)
+	if err != nil {
+		return err
+	}
+	return chosen(sheet, arguments[2:], out)
+}
+
+func runSet(arguments []string, out io.Writer) error {
+	sheet, chosen, err := prepareAccess(setters, arguments)
+	if err != nil {
+		return err
+	}
+	if err := chosen(sheet, arguments[2:], out); err != nil {
+		return err
+	}
+	return store(arguments[1], sheet)
+}
+
+func runParts(arguments []string, out io.Writer) error {
 	flags := flag.NewFlagSet("parts", flag.ContinueOnError)
 	scale := flags.Int("scale", 4, "size of one sprite pixel")
 	if err := flags.Parse(arguments); err != nil || flags.NArg() != 2 {
@@ -253,7 +292,7 @@ func runParts(arguments []string) error {
 			row = append(row, croppedCell(view.Layer))
 		}
 		rows = append(rows, row)
-		fmt.Printf("row %d: %s depth %d views %v\n", len(rows)-1, part.Name, part.Depth, viewTurns(part))
+		fmt.Fprintf(out, "row %d: %s depth %d views %v\n", len(rows)-1, part.Name, part.Depth, viewTurns(part))
 	}
 	return save(flags.Arg(1), drawGrid(sheet, transpose(rows), max(1, *scale)))
 }
@@ -305,6 +344,156 @@ func viewTurns(part *sprite.Part) []float64 {
 		turns = append(turns, view.Turn)
 	}
 	return turns
+}
+
+// ===== Access =====
+
+func prepareAccess(table map[string]access, arguments []string) (*sprite.Sheet, access, error) {
+	if len(arguments) < 2 {
+		return nil, nil, errors.New("needs what to reach, then a sprite")
+	}
+	chosen, isKnown := table[arguments[0]]
+	if !isKnown {
+		return nil, nil, fmt.Errorf("cannot reach %q", arguments[0])
+	}
+	sheet, err := load(arguments[1])
+	return sheet, chosen, err
+}
+
+func getPart(sheet *sprite.Sheet, arguments []string, out io.Writer) error {
+	if len(arguments) != 1 {
+		return errors.New("needs one part name")
+	}
+	index := sheet.FindPart(arguments[0])
+	if index < 0 {
+		return fmt.Errorf("no part named %q", arguments[0])
+	}
+	part := sheet.Parts[index]
+	fmt.Fprintf(out, "part %s\nparent %s\npivot %d %d\ntip %d %d\ndepth %d\nsolid %s\n", part.Name, parentName(sheet, part), part.Pivot.X, part.Pivot.Y, part.Tip.X, part.Tip.Y, part.Depth, solidWords[part.IsSolid])
+	for _, axis := range poseAxes {
+		if part.LimitedAxes&(1<<axis) == 0 {
+			continue
+		}
+		fmt.Fprintf(out, "limit %s %s %s\n", axis, degreesText(part.Limits[axis][0]), degreesText(part.Limits[axis][1]))
+	}
+	fmt.Fprintf(out, "views %s\n", joinDegrees(viewTurns(part)))
+	return nil
+}
+
+func getPose(sheet *sprite.Sheet, arguments []string, out io.Writer) error {
+	if len(arguments) != 2 {
+		return errors.New("needs a move and a frame index")
+	}
+	frame, err := frameIndex(arguments[1])
+	if err != nil {
+		return err
+	}
+	pose, kind, err := sheet.PoseOf(arguments[0], frame)
+	if err != nil {
+		return err
+	}
+	stored := sheet.FindAnimation(arguments[0]).Frames[frame]
+	fmt.Fprintf(out, "frame %s %d %s %d ticks%s\n", arguments[0], frame, sprite.FrameKindNames[kind], stored.Ticks, bakedNote(stored.Baked != nil))
+	for index, part := range sheet.Parts {
+		fmt.Fprintf(out, "%-16s%s shift %d %d%s\n", part.Name, rotationsText(&pose[index]), pose[index].Shift.X, pose[index].Shift.Y, drawingNote(pose[index].Drawing))
+	}
+	return nil
+}
+
+func setPose(sheet *sprite.Sheet, arguments []string, out io.Writer) error {
+	if len(arguments) < 5 || (len(arguments)-2)%3 != 0 {
+		return errors.New("needs a move, a frame index, then triples of part, axis and degrees")
+	}
+	frame, err := frameIndex(arguments[1])
+	if err != nil {
+		return err
+	}
+	pose, err := sheet.KeyPose(arguments[0], frame)
+	if err != nil {
+		return err
+	}
+	changes, err := readRotationChanges(sheet, arguments[2:])
+	if err != nil {
+		return err
+	}
+	for _, change := range changes {
+		part := sheet.Parts[change.part]
+		isLimited := part.Limit(change.axis, change.degrees) != change.degrees
+		applied := part.Rotate(&pose[change.part], change.axis, change.degrees)
+		fmt.Fprintf(out, "%s %s %s%s\n", part.Name, change.axis, degreesText(applied), limitNote(isLimited, change.degrees))
+	}
+	return nil
+}
+
+func readRotationChanges(sheet *sprite.Sheet, fields []string) ([]rotationChange, error) {
+	changes := make([]rotationChange, 0, len(fields)/3)
+	for start := 0; start < len(fields); start += 3 {
+		index := sheet.FindPart(fields[start])
+		axis, isAxis := sprite.AxisNamed(fields[start+1])
+		degrees, err := strconv.ParseFloat(fields[start+2], 64)
+		isNumber := err == nil && !math.IsNaN(degrees) && !math.IsInf(degrees, 0)
+		if index < 0 || !isAxis || !isNumber {
+			return nil, fmt.Errorf("%q should be a known part, an axis x, y or z, then degrees", strings.Join(fields[start:start+3], " "))
+		}
+		changes = append(changes, rotationChange{index, axis, degrees})
+	}
+	return changes, nil
+}
+
+func frameIndex(text string) (int, error) {
+	frame, err := strconv.Atoi(text)
+	if err != nil {
+		return 0, fmt.Errorf("frame index %q is not a whole number", text)
+	}
+	return frame, nil
+}
+
+func parentName(sheet *sprite.Sheet, part *sprite.Part) string {
+	if part.Parent == sprite.NoParent {
+		return "none"
+	}
+	return sheet.Parts[part.Parent].Name
+}
+
+func rotationsText(joint *sprite.Joint) string {
+	var builder strings.Builder
+	for _, axis := range poseAxes {
+		fmt.Fprintf(&builder, " %s %s", axis, degreesText(*joint.Rotation(axis)))
+	}
+	return builder.String()
+}
+
+func joinDegrees(values []float64) string {
+	texts := make([]string, len(values))
+	for index, value := range values {
+		texts[index] = degreesText(value)
+	}
+	return strings.Join(texts, " ")
+}
+
+func degreesText(degrees float64) string {
+	return strconv.FormatFloat(math.Round(degrees*10)/10+0, 'f', -1, 64)
+}
+
+func bakedNote(isBaked bool) string {
+	if !isBaked {
+		return ""
+	}
+	return " baked"
+}
+
+func drawingNote(drawing string) string {
+	if drawing == "" {
+		return ""
+	}
+	return " drawing " + drawing
+}
+
+func limitNote(isLimited bool, asked float64) string {
+	if !isLimited {
+		return ""
+	}
+	return fmt.Sprintf(" (asked %s, limited)", degreesText(asked))
 }
 
 // ===== Rendering =====
