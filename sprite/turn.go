@@ -89,17 +89,19 @@ func (p *Part) DeriveView(turn, sourceTurn float64, isMirrored bool, widthScale 
 		source = found.Layer
 	}
 	derived := NewLayer()
-	centerX := float64(p.Pivot.X) + 0.5
-	side := float64(1 - 2*boolToInt(isMirrored))
-	scale := math.Max(widthScale, 0.05)
-	area := source.Area()
-	reachLeft := centerX + (float64(area.X)-centerX)*side*scale
-	reachRight := centerX + (float64(area.X+area.Width)-centerX)*side*scale
-	left, right := int(math.Floor(min(reachLeft, reachRight)))-1, int(math.Ceil(max(reachLeft, reachRight)))+1
-	for y := area.Y; y < area.Y+area.Height; y++ {
-		for x := left; x <= right; x++ {
-			sourceX := int(math.Floor(centerX + (float64(x)+0.5-centerX)*side/scale))
-			derived.Set(x, y, source.At(sourceX, y))
+	centerX, centerY := PixelCenter(p.Pivot)
+	boneX, boneY, length, _ := p.bone()
+	alongX, alongY := boneX/length, boneY/length
+	acrossScale := float64(1-2*boolToInt(isMirrored)) * math.Max(widthScale, 0.05)
+	reach := acrossReach(source.Area(), centerX, centerY, alongX, alongY, acrossScale)
+	for y := reach.Y; y < reach.Y+reach.Height; y++ {
+		for x := reach.X; x < reach.X+reach.Width; x++ {
+			offsetX, offsetY := float64(x)+0.5-centerX, float64(y)+0.5-centerY
+			along := offsetX*alongX + offsetY*alongY
+			across := (alongX*offsetY - alongY*offsetX) / acrossScale
+			sourceX := int(math.Floor(centerX + along*alongX - across*alongY))
+			sourceY := int(math.Floor(centerY + along*alongY + across*alongX))
+			derived.Set(x, y, source.At(sourceX, sourceY))
 		}
 	}
 	view := p.FindView(turn)
@@ -256,12 +258,7 @@ func faceLinear(turned orientation, tilt float64) [4]float64 {
 }
 
 func cardLinear(part *Part, turned orientation, isMirrored bool) ([4]float64, float64) {
-	boneX, boneY := float64(part.Tip.X-part.Pivot.X), float64(part.Tip.Y-part.Pivot.Y)
-	length := math.Hypot(boneX, boneY)
-	hasBone := length > 0
-	if !hasBone {
-		boneX, boneY, length = 1, 0, 1
-	}
+	boneX, boneY, length, hasBone := part.bone()
 	alongX, alongY := boneX/length, boneY/length
 	world := turned.apply([3]float64{boneX, boneY, 0})
 	projectedX, projectedY := foreshorten(world, turned, alongX, alongY, length)
@@ -276,6 +273,35 @@ func cardLinear(part *Part, turned orientation, isMirrored bool) ([4]float64, fl
 		firstX*alongY + secondX*acrossY, firstY*alongY + secondY*acrossY,
 	}
 	return linear, world[2] * 0.5 * float64(boolToInt(hasBone))
+}
+
+func (p *Part) bone() (float64, float64, float64, bool) {
+	boneX, boneY := float64(p.Tip.X-p.Pivot.X), float64(p.Tip.Y-p.Pivot.Y)
+	length := math.Hypot(boneX, boneY)
+	if length == 0 {
+		return 1, 0, 1, false
+	}
+	return boneX, boneY, length, true
+}
+
+func acrossReach(area Area, centerX, centerY, alongX, alongY, acrossScale float64) Area {
+	left, top, right, bottom := math.Inf(1), math.Inf(1), math.Inf(-1), math.Inf(-1)
+	for _, corner := range [4][2]float64{
+		{float64(area.X), float64(area.Y)}, {float64(area.X + area.Width), float64(area.Y)},
+		{float64(area.X), float64(area.Y + area.Height)}, {float64(area.X + area.Width), float64(area.Y + area.Height)},
+	} {
+		offsetX, offsetY := corner[0]-centerX, corner[1]-centerY
+		along := offsetX*alongX + offsetY*alongY
+		across := (alongX*offsetY - alongY*offsetX) * acrossScale
+		x, y := centerX+along*alongX-across*alongY, centerY+along*alongY+across*alongX
+		left, top, right, bottom = min(left, x), min(top, y), max(right, x), max(bottom, y)
+	}
+	return Area{
+		X:      int(math.Floor(left)) - 1,
+		Y:      int(math.Floor(top)) - 1,
+		Width:  int(math.Ceil(right)) - int(math.Floor(left)) + 2,
+		Height: int(math.Ceil(bottom)) - int(math.Floor(top)) + 2,
+	}
 }
 
 func foreshorten(world [3]float64, turned orientation, alongX, alongY, length float64) (float64, float64) {

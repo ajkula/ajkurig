@@ -114,6 +114,20 @@ func TestViewFollowsTheFacing(t *testing.T) {
 	}
 }
 
+func TestDerivedViewMirrorsAcrossTheBone(t *testing.T) {
+	part := &Part{Pivot: Point{0, 0}, Tip: Point{10, 10}, Layer: NewLayer()}
+	part.Set(5, 0, 7)
+	part.Set(4, 4, 8)
+	back := part.DeriveView(180, 0, true, 1)
+	if back.At(0, 5) != 7 || back.At(4, 4) != 8 || back.At(5, 0) != 0 {
+		t.Fatal("a mirrored view reflects the drawing across the bone, like the renderer does")
+	}
+	narrow := part.DeriveView(90, 0, false, 0.5)
+	if narrow.At(4, 4) != 8 || narrow.At(5, 0) != 0 {
+		t.Fatal("a narrower view squeezes the drawing toward the bone and keeps the pixels on it")
+	}
+}
+
 func TestHangerChoosesTheTorsoView(t *testing.T) {
 	sheet := turningHumanoid()
 	torso := sheet.FindPart("torso")
