@@ -5,6 +5,7 @@ import (
 	"embed"
 	"image/color"
 	"strings"
+	"sync"
 
 	"github.com/hajimehoshi/ebiten/v2"
 	"github.com/hajimehoshi/ebiten/v2/text/v2"
@@ -66,6 +67,11 @@ const (
 
 //go:embed fonts/*.ttf
 var embeddedFonts embed.FS
+
+var parsedFaces = struct {
+	sync.Mutex
+	byKey map[any]*text.GoTextFaceSource
+}{byKey: map[any]*text.GoTextFaceSource{}}
 
 var textOutlineOffsets = [][2]float32{{-1, -1}, {0, -1}, {1, -1}, {-1, 0}, {1, 0}, {-1, 1}, {0, 1}, {1, 1}}
 
@@ -222,9 +228,10 @@ func appendFaceIf(faces []text.Face, source *text.GoTextFaceSource, size float64
 }
 
 func loadFaceSource(fontData, fallback []byte) *text.GoTextFaceSource {
-	source, err := text.NewGoTextFaceSource(bytes.NewReader(fontData))
-	if err == nil {
-		return source
+	if len(fontData) > 0 {
+		if source := parseFaceOnce(&fontData[0], func() []byte { return fontData }); source != nil {
+			return source
+		}
 	}
 	if fallback == nil {
 		return nil
@@ -232,12 +239,25 @@ func loadFaceSource(fontData, fallback []byte) *text.GoTextFaceSource {
 	return loadFaceSource(fallback, nil)
 }
 
-func loadEmbeddedFace(path string) *text.GoTextFaceSource {
-	data, err := embeddedFonts.ReadFile(path)
-	if err != nil {
-		return nil
+func parseFaceOnce(key any, readFont func() []byte) *text.GoTextFaceSource {
+	parsedFaces.Lock()
+	defer parsedFaces.Unlock()
+	if source, isParsed := parsedFaces.byKey[key]; isParsed {
+		return source
 	}
-	return loadFaceSource(data, nil)
+	source, err := text.NewGoTextFaceSource(bytes.NewReader(readFont()))
+	if err != nil {
+		source = nil
+	}
+	parsedFaces.byKey[key] = source
+	return source
+}
+
+func loadEmbeddedFace(path string) *text.GoTextFaceSource {
+	return parseFaceOnce(path, func() []byte {
+		data, _ := embeddedFonts.ReadFile(path)
+		return data
+	})
 }
 
 func wrapTokens(message string) []wrapToken {
