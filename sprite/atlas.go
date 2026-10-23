@@ -43,7 +43,7 @@ func (c *Clip) Duration() int {
 
 func (c *Clip) Draw(screen *ebiten.Image, tick int, x, y, scale float64, isFacingLeft bool) {
 	direction := float64(1 - 2*mathx.BoolToIndex(isFacingLeft))
-	options := &ebiten.DrawImageOptions{}
+	options := &ebiten.DrawImageOptions{Filter: ebiten.FilterPixelated}
 	options.GeoM.Translate(-c.AnchorX, -c.AnchorY)
 	options.GeoM.Scale(direction*scale, scale)
 	options.GeoM.Translate(x, y)
