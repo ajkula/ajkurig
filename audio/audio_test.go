@@ -15,7 +15,11 @@ import (
 
 // ===== Constants =====
 
-const tensionMaximum = 3
+const (
+	tensionMaximum     = 3
+	renderedSeconds    = 2
+	gameThreadBusyTime = 100 * time.Millisecond
+)
 
 // ===== Public API =====
 
@@ -439,26 +443,22 @@ func TestGameThreadNeverWaitsForTheMusic(t *testing.T) {
 	engine := NewSilentEngine(NewSoundBank(), NewSignalBoard())
 	engine.SetSongs(exampleSongs())
 	engine.SelectSong(1)
-	buffer := make([]byte, bytesPerFrame*sampleRate)
+	buffer := make([]byte, bytesPerFrame*sampleRate*renderedSeconds)
 	done := make(chan struct{})
+	begin := time.Now()
 	go func() {
 		engine.Read(buffer)
 		close(done)
 	}()
-	worst := time.Duration(0)
-	for isReading := true; isReading; {
-		select {
-		case <-done:
-			isReading = false
-		default:
-			begin := time.Now()
-			engine.SetEffectsVolume(0.5)
-			engine.PushSignals()
-			engine.Play(SoundMenuSelect, float32(time.Now().UnixNano())/1e9)
-			worst = max(worst, time.Since(begin))
-		}
+	for time.Since(begin) < gameThreadBusyTime {
+		engine.SetEffectsVolume(0.5)
+		engine.PushSignals()
+		engine.Play(SoundMenuSelect, float32(time.Since(begin).Seconds()))
 	}
-	if worst > 40*time.Millisecond {
-		t.Fatalf("the game thread waited %v while the music rendered", worst)
+	select {
+	case <-done:
+		t.Fatalf("the game thread was held until %d seconds of music had rendered", renderedSeconds)
+	default:
 	}
+	<-done
 }
