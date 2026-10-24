@@ -1,6 +1,9 @@
 package sprite
 
-import "math"
+import (
+	"math"
+	"slices"
+)
 
 // ===== Types =====
 
@@ -9,6 +12,15 @@ type Body struct {
 	EndWidth   float64
 	DepthRatio float64
 	Color      uint8
+	Bands      []Band
+}
+
+type Band struct {
+	From      float64
+	To        float64
+	Color     uint8
+	Around    float64
+	HalfAngle float64
 }
 
 type bodySource struct {
@@ -32,7 +44,7 @@ func (p *Part) isVolume() bool {
 
 func (p *Part) bodyVolume() *Volume {
 	source := bodySource{*p.Body, p.Pivot, p.Tip}
-	if p.volume != nil && p.bodySource == source {
+	if p.volume != nil && p.bodySource.matches(source) {
 		return p.volume
 	}
 	p.volume, p.bodySource, p.volumeKey = p.Body.fill(p.Pivot, p.Tip), source, nil
@@ -49,13 +61,12 @@ func (b Body) fill(pivot, tip Point) *Volume {
 	length := math.Hypot(boneX, boneY)
 	for index := range volume.cells {
 		x, y, z := volume.coordinates(index)
-		isInside := b.contains(float64(x-pivot.X), float64(y-pivot.Y), float64(z), boneX, boneY, length)
-		volume.cells[index] = [2]uint8{Transparent, b.Color}[boolToInt(isInside)]
+		volume.cells[index] = b.colorAt(float64(x-pivot.X), float64(y-pivot.Y), float64(z), boneX, boneY, length)
 	}
 	return volume
 }
 
-func (b Body) contains(x, y, z, boneX, boneY, length float64) bool {
+func (b Body) colorAt(x, y, z, boneX, boneY, length float64) uint8 {
 	along, side := 0.0, math.Hypot(x, y)
 	if length > 0 {
 		along, side = (x*boneX+y*boneY)/length, (x*boneY-y*boneX)/length
@@ -64,7 +75,27 @@ func (b Body) contains(x, y, z, boneX, boneY, length float64) bool {
 	progress := reached / max(length, 1)
 	radius := (b.StartWidth + (b.EndWidth-b.StartWidth)*progress) / 2
 	overshoot := along - reached
-	return (overshoot*overshoot+side*side)/(radius*radius)+z*z/(radius*radius*b.DepthRatio*b.DepthRatio) < 1
+	isInside := (overshoot*overshoot+side*side)/(radius*radius)+z*z/(radius*radius*b.DepthRatio*b.DepthRatio) < 1
+	if !isInside {
+		return Transparent
+	}
+	color, angle := b.Color, math.Atan2(side, -z)*180/math.Pi
+	for _, band := range b.Bands {
+		color = [2]uint8{color, band.Color}[boolToInt(band.covers(progress, angle))]
+	}
+	return color
+}
+
+func (band Band) covers(progress, angle float64) bool {
+	isAlong := progress >= band.From && progress <= band.To
+	isAround := band.HalfAngle == 0 || math.Abs(math.Remainder(angle-band.Around, 360)) <= band.HalfAngle
+	return isAlong && isAround
+}
+
+func (s bodySource) matches(other bodySource) bool {
+	first, second := s.body, other.body
+	isSameShape := first.StartWidth == second.StartWidth && first.EndWidth == second.EndWidth && first.DepthRatio == second.DepthRatio && first.Color == second.Color
+	return isSameShape && slices.Equal(first.Bands, second.Bands) && s.pivot == other.pivot && s.tip == other.tip
 }
 
 func (p *Part) drawSilhouette() {

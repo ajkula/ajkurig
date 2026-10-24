@@ -11,7 +11,7 @@ Each step is test-driven: write the failing tests listed, make them pass, keep e
 
 ## 2. Clothes
 
-- [ ] Colour bands along the bone (sleeve then skin, trouser then shoe) and sectors around it (a tie in front, a stripe on the side).
+- [x] Colour bands along the bone (sleeve then skin, trouser then shoe) and sectors around it (a tie in front, a stripe on the side).
   - Tests: a band colours only its stretch of the bone; a front sector is seen from the front and hidden from the back.
 
 ## 3. Shading

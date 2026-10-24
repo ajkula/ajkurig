@@ -46,6 +46,7 @@ var directives = map[string]func(p *parser, fields []string) error{
 	"depth":    (*parser).readDepth,
 	"solid":    (*parser).readSolid,
 	"body":     (*parser).readBody,
+	"band":     (*parser).readBand,
 	"view":     (*parser).readView,
 	"pixels":   (*parser).readPixels,
 	"anim":     (*parser).readAnimation,
@@ -253,6 +254,21 @@ func (p *parser) readBody(fields []string) error {
 		return fmt.Errorf("body needs positive widths and depth ratio and a palette colour, got %q", strings.Join(fields, " "))
 	}
 	p.part.Body = &Body{StartWidth: widths[0], EndWidth: widths[1], DepthRatio: widths[2], Color: uint8(color)}
+	return nil
+}
+
+func (p *parser) readBand(fields []string) error {
+	isSectored := len(fields) == 6 && fields[3] == "around"
+	if p.part == nil || p.part.Body == nil || (len(fields) != 3 && !isSectored) || len(fields[2]) != 1 {
+		return errors.New("band belongs to a body and needs where it starts and ends along the bone and a colour, like: band 0 0.6 s, then an optional sector, like: around 0 20")
+	}
+	stretch, err := readFloats(fields[:2])
+	sector, sectorErr := readFloats(append(fields[min(4, len(fields)):], "0", "0")[:2])
+	color := p.symbols[fields[2][0]]
+	if err != nil || sectorErr != nil || color <= int16(Transparent) || sector[1] < 0 {
+		return fmt.Errorf("band needs numbers and a palette colour, got %q", strings.Join(fields, " "))
+	}
+	p.part.Body.Bands = append(p.part.Body.Bands, Band{From: stretch[0], To: stretch[1], Color: uint8(color), Around: sector[0], HalfAngle: sector[1]})
 	return nil
 }
 
@@ -505,12 +521,23 @@ func writePart(builder *strings.Builder, sheet *Sheet, part *Part) {
 	builder.WriteString([2]string{"", "solid\n"}[boolToInt(part.IsSolid)])
 	if part.Body != nil {
 		fmt.Fprintf(builder, "body %s %s %s %c\n", formatOffset(part.Body.StartWidth), formatOffset(part.Body.EndWidth), formatOffset(part.Body.DepthRatio), sheet.Palette[part.Body.Color].Symbol)
+		writeBands(builder, sheet, part.Body.Bands)
 		return
 	}
 	writePixels(builder, sheet, part.Layer)
 	for _, view := range part.Views {
 		fmt.Fprintf(builder, "view %s%s%s\n", strconv.FormatFloat(view.Turn, 'f', -1, 64), [2]string{"", " " + strconv.FormatFloat(view.Tilt, 'f', -1, 64)}[boolToInt(view.Tilt != 0)], [2]string{"", " " + view.Name}[boolToInt(view.Name != "")])
 		writePixels(builder, sheet, view.Layer)
+	}
+}
+
+func writeBands(builder *strings.Builder, sheet *Sheet, bands []Band) {
+	for _, band := range bands {
+		fmt.Fprintf(builder, "band %s %s %c", formatOffset(band.From), formatOffset(band.To), sheet.Palette[band.Color].Symbol)
+		if band.HalfAngle > 0 {
+			fmt.Fprintf(builder, " around %s %s", formatOffset(band.Around), formatOffset(band.HalfAngle))
+		}
+		builder.WriteString("\n")
 	}
 }
 
