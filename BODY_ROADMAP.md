@@ -1,6 +1,6 @@
 # Body roadmap
 
-Goal: build a caricatured wrestler fast. The artist draws the head (the likeness); the body comes from a few numbers and turns correctly at any angle, lying, lifted or upside down.
+Goal: build a humanoid fast. The artist draws the head; the body comes from a few numbers and turns correctly at any angle, lying, lifted or upside down.
 
 Each step is test-driven: write the failing tests listed, make them pass, keep every existing test green, then show the result before the next step.
 
@@ -29,6 +29,6 @@ Each step is test-driven: write the failing tests listed, make them pass, keep e
 - [x] A `.body` text file describes proportions (height, leg length, head scale) and every part's shape and clothes; `spritetool build hero.spr suit.body micron.body` creates or updates a humanoid, the later files overriding the earlier ones, and keeps the drawn head and its views.
   - Tests: building twice gives the same sprite; a drawn head survives a rebuild; the common moves compose on a built body with the feet planted.
 
-## 6. First caricature
+## 6. First built character
 
-- [ ] One wrestler built from a body file and a drawn head, with the common wrestling moves, shown in the arena at near and far depth.
+- [ ] One character built from a body file and a drawn head, with common moves composed on it, shown on a perspective floor at near and far depth.

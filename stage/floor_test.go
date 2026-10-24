@@ -8,7 +8,7 @@ import (
 
 // ===== Helpers =====
 
-var arena = Floor{FarY: 400, NearY: 700, FarScale: 3, NearScale: 4.5, VanishX: 640}
+var tilted = Floor{FarY: 400, NearY: 700, FarScale: 3, NearScale: 4.5, VanishX: 640}
 
 func isNear(a, b float32) bool {
 	return mathx.Abs(a-b) < 1e-3
@@ -17,32 +17,32 @@ func isNear(a, b float32) bool {
 // ===== Tests =====
 
 func TestTheNearEdgeIsDrawnAsIs(t *testing.T) {
-	spot := arena.Project(100, arena.NearY, 0)
-	if !isNear(spot.X, 100) || !isNear(spot.Y, arena.NearY) || !isNear(spot.Scale, arena.NearScale) {
+	spot := tilted.Project(100, tilted.NearY, 0)
+	if !isNear(spot.X, 100) || !isNear(spot.Y, tilted.NearY) || !isNear(spot.Scale, tilted.NearScale) {
 		t.Fatalf("near edge projected to %+v", spot)
 	}
 }
 
 func TestTheFarEdgeShrinksTowardTheVanishingPoint(t *testing.T) {
-	spot := arena.Project(100, arena.FarY, 0)
-	wantedX := arena.VanishX + (100-arena.VanishX)*arena.FarScale/arena.NearScale
-	if !isNear(spot.X, wantedX) || !isNear(spot.Y, arena.FarY) || !isNear(spot.Scale, arena.FarScale) {
+	spot := tilted.Project(100, tilted.FarY, 0)
+	wantedX := tilted.VanishX + (100-tilted.VanishX)*tilted.FarScale/tilted.NearScale
+	if !isNear(spot.X, wantedX) || !isNear(spot.Y, tilted.FarY) || !isNear(spot.Scale, tilted.FarScale) {
 		t.Fatalf("far edge projected to %+v, wanted x %v", spot, wantedX)
 	}
 }
 
 func TestTheMiddleOfTheFloorLiesFartherThanHalfway(t *testing.T) {
-	middle := arena.Project(arena.VanishX, (arena.FarY+arena.NearY)/2, 0)
-	isBetween := middle.Scale > arena.FarScale && middle.Scale < (arena.FarScale+arena.NearScale)/2
-	if !isBetween || middle.Y >= (arena.FarY+arena.NearY)/2 {
+	middle := tilted.Project(tilted.VanishX, (tilted.FarY+tilted.NearY)/2, 0)
+	isBetween := middle.Scale > tilted.FarScale && middle.Scale < (tilted.FarScale+tilted.NearScale)/2
+	if !isBetween || middle.Y >= (tilted.FarY+tilted.NearY)/2 {
 		t.Fatalf("perspective should squeeze the far half, got %+v", middle)
 	}
 }
 
 func TestHeightShrinksWithDistance(t *testing.T) {
-	near := arena.Project(0, arena.NearY, 0).Y - arena.Project(0, arena.NearY, 50).Y
-	far := arena.Project(0, arena.FarY, 0).Y - arena.Project(0, arena.FarY, 50).Y
-	if !isNear(near, 50) || !isNear(far, 50*arena.FarScale/arena.NearScale) {
+	near := tilted.Project(0, tilted.NearY, 0).Y - tilted.Project(0, tilted.NearY, 50).Y
+	far := tilted.Project(0, tilted.FarY, 0).Y - tilted.Project(0, tilted.FarY, 50).Y
+	if !isNear(near, 50) || !isNear(far, 50*tilted.FarScale/tilted.NearScale) {
 		t.Fatalf("a 50 high lift is drawn %v near and %v far", near, far)
 	}
 }
@@ -57,8 +57,8 @@ func TestAFlatFloorKeepsEveryPoint(t *testing.T) {
 
 func TestUnprojectFindsTheWorldColumnUnderAScreenColumn(t *testing.T) {
 	y := float32(500)
-	x := arena.Unproject(0, y)
-	if spot := arena.Project(x, y, 0); !isNear(spot.X, 0) {
+	x := tilted.Unproject(0, y)
+	if spot := tilted.Project(x, y, 0); !isNear(spot.X, 0) {
 		t.Fatalf("world column %v is drawn at %v", x, spot.X)
 	}
 }
