@@ -63,6 +63,7 @@ func (b Body) fill(pivot, tip Point) *Volume {
 		x, y, z := volume.coordinates(index)
 		volume.cells[index] = b.colorAt(float64(x-pivot.X), float64(y-pivot.Y), float64(z), boneX, boneY, length)
 	}
+	volume.computeNormals()
 	return volume
 }
 

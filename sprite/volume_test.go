@@ -94,7 +94,7 @@ func shootCube(volume *Volume, turn, tilt float64) []uint8 {
 	for index := range depths {
 		depths[index] = math.Inf(1)
 	}
-	volume.render(yawOrientation(turn).then(tiltOrientation(tilt)), [3]float64{20.5, 20.5, 0}, cubeOutline, area, pixels, depths)
+	volume.render(yawOrientation(turn).then(tiltOrientation(tilt)), [3]float64{20.5, 20.5, 0}, cubeOutline, &[256]Shade{}, area, pixels, depths)
 	return pixels
 }
 

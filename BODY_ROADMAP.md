@@ -16,7 +16,7 @@ Each step is test-driven: write the failing tests listed, make them pass, keep e
 
 ## 3. Shading
 
-- [ ] Each body voxel keeps its surface normal; a fixed light colours it with the lit, base or shadow swatch of its material, whatever the pose.
+- [x] Each body voxel keeps its surface normal; a fixed light colours it with the lit, base or shadow swatch of its material, whatever the pose.
   - Tests: the side toward the light uses the lit swatch, the other side the shadow swatch; turning the part moves the shadow with it.
 
 ## 4. Body shapes

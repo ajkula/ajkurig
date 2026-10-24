@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"io/fs"
+	"slices"
 	"strconv"
 	"strings"
 )
@@ -38,6 +39,7 @@ var directives = map[string]func(p *parser, fields []string) error{
 	"sprite":   (*parser).readSprite,
 	"size":     (*parser).readSize,
 	"color":    (*parser).readColor,
+	"shade":    (*parser).readShade,
 	"part":     (*parser).readPart,
 	"parent":   (*parser).readParent,
 	"pivot":    (*parser).readPivot,
@@ -98,6 +100,12 @@ func Write(sheet *Sheet) string {
 	fmt.Fprintf(&builder, "sprite %s\nsize %d %d\n", sheet.Name, sheet.Width, sheet.Height)
 	for _, swatch := range sheet.Palette[1:] {
 		fmt.Fprintf(&builder, "color %c %02x%02x%02x\n", swatch.Symbol, swatch.Color[0], swatch.Color[1], swatch.Color[2])
+	}
+	for base, shade := range sheet.Shades {
+		if shade == (Shade{}) {
+			continue
+		}
+		fmt.Fprintf(&builder, "shade %c %c %c\n", sheet.Palette[base].Symbol, sheet.Palette[shade.Lit].Symbol, sheet.Palette[shade.Shadow].Symbol)
 	}
 	for _, part := range sheet.Parts {
 		writePart(&builder, sheet, part)
@@ -241,6 +249,18 @@ func (p *parser) readSolid(fields []string) error {
 		return errors.New("solid belongs to a part and takes nothing after it")
 	}
 	p.part.IsSolid = true
+	return nil
+}
+
+func (p *parser) readShade(fields []string) error {
+	values := [3]int16{unknownSymbol, unknownSymbol, unknownSymbol}
+	for index, field := range fields[:min(3, len(fields))] {
+		values[index] = [2]int16{unknownSymbol, p.symbols[field[0]]}[boolToInt(len(field) == 1)]
+	}
+	if len(fields) != 3 || slices.Min(values[:]) <= int16(Transparent) {
+		return fmt.Errorf("shade needs a palette colour then its lit and shadow colours, like: shade p f k, got %q", strings.Join(fields, " "))
+	}
+	p.sheet.Shades[values[0]] = Shade{Lit: uint8(values[1]), Shadow: uint8(values[2])}
 	return nil
 }
 

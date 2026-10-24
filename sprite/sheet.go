@@ -73,6 +73,7 @@ type Sheet struct {
 	Width        int
 	Height       int
 	Palette      []Swatch
+	Shades       [256]Shade
 	Parts        []*Part
 	Animations   []*Animation
 	Snapshots    []*Snapshot
@@ -430,7 +431,7 @@ func (s *Sheet) stampCard(index int, area Area, target []uint8, _ uint8) {
 }
 
 func (s *Sheet) stampSolid(index int, area Area, target []uint8, outline uint8) {
-	s.Parts[index].solidVolume().render(s.orientations[index], s.positions[index], outline, area, target, s.depthBuffer)
+	s.Parts[index].solidVolume().render(s.orientations[index], s.positions[index], outline, &s.Shades, area, target, s.depthBuffer)
 }
 
 func (s *Sheet) darkestColor() uint8 {

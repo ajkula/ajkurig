@@ -2,6 +2,7 @@ package sprite
 
 import (
 	"reflect"
+	"slices"
 	"strings"
 	"testing"
 )
@@ -147,5 +148,63 @@ func TestBandsAreWrittenAndReadBack(t *testing.T) {
 	}
 	if !reflect.DeepEqual(read.Parts[0].Body, sheet.Parts[0].Body) {
 		t.Fatalf("bands read back as %+v, wanted %+v", read.Parts[0].Body.Bands, sheet.Parts[0].Body.Bands)
+	}
+}
+
+func shadedArm(t *testing.T) (*Sheet, []uint8) {
+	t.Helper()
+	sheet, colors := clothedArm(t)
+	sheet.Shades[colors[0]] = Shade{Lit: colors[1], Shadow: colors[2]}
+	return sheet, colors
+}
+
+func rowColors(pixels []uint8, row int, color []uint8) []uint8 {
+	seen := []uint8{}
+	for _, value := range pixels[row*bodyCanvas : (row+1)*bodyCanvas] {
+		if slices.Contains(color, value) {
+			seen = append(seen, value)
+		}
+	}
+	return seen
+}
+
+func columnColors(pixels []uint8, column int, color []uint8) []uint8 {
+	seen := []uint8{}
+	for row := range bodyCanvas {
+		if value := pixels[row*bodyCanvas+column]; slices.Contains(color, value) {
+			seen = append(seen, value)
+		}
+	}
+	return seen
+}
+
+func TestTheSideTowardTheLightIsLitAndTheOtherInShadow(t *testing.T) {
+	sheet, colors := shadedArm(t)
+	row := rowColors(renderTurned(sheet, 0, 0), 24, colors[:3])
+	if len(row) == 0 || row[0] != colors[1] || row[len(row)-1] != colors[2] {
+		t.Fatalf("lit on the left, shadow on the right, got %v", row)
+	}
+}
+
+func TestTheShadowTurnsWithThePart(t *testing.T) {
+	sheet, colors := shadedArm(t)
+	pose := sheet.Grow(nil)
+	pose[0].Angle = 90
+	pixels := make([]uint8, bodyCanvas*bodyCanvas)
+	sheet.Render(pose, pixels)
+	column := columnColors(pixels, 16, colors[:3])
+	if len(column) == 0 || column[0] != colors[1] || column[len(column)-1] != colors[2] {
+		t.Fatalf("lying down the arm is lit on top and shaded below, got %v", column)
+	}
+}
+
+func TestShadesAreWrittenAndReadBack(t *testing.T) {
+	sheet, colors := shadedArm(t)
+	read, err := Parse(Write(sheet))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if read.Shades != sheet.Shades || read.Shades[colors[0]] == (Shade{}) {
+		t.Fatal("the shade of the arm colour reads back")
 	}
 }

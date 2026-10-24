@@ -8,15 +8,16 @@ import (
 // ===== Types =====
 
 type Volume struct {
-	Pivot  Point
-	MinX   int
-	MinY   int
-	MinZ   int
-	Width  int
-	Height int
-	Depth  int
-	cells  []uint8
-	faces  []voxelFace
+	Pivot   Point
+	MinX    int
+	MinY    int
+	MinZ    int
+	Width   int
+	Height  int
+	Depth   int
+	cells   []uint8
+	faces   []voxelFace
+	normals [][3]float64
 }
 
 type voxelFace struct {
@@ -62,6 +63,7 @@ const (
 	rayNudge      = 1e-9
 	parallelRay   = 1e-12
 	outlineWidth  = 1
+	noCell        = -1
 )
 
 var neighbours = [4][2]int{{-1, 0}, {1, 0}, {0, -1}, {0, 1}}
@@ -122,7 +124,7 @@ func (p *Part) solidVolume() *Volume {
 	return p.volume
 }
 
-func (v *Volume) render(turned orientation, origin [3]float64, outline uint8, area Area, pixels []uint8, depths []float64) {
+func (v *Volume) render(turned orientation, origin [3]float64, outline uint8, shades *[256]Shade, area Area, pixels []uint8, depths []float64) {
 	region := v.screenBox(turned, origin).clipTo(area)
 	width, height := region.maxX-region.minX, region.maxY-region.minY
 	if width <= 0 || height <= 0 {
@@ -131,7 +133,8 @@ func (v *Volume) render(turned orientation, origin [3]float64, outline uint8, ar
 	order := v.faceOrder(towardViewer(turned))
 	hits, hitDepths := make([]uint8, width*height), make([]float64, width*height)
 	for index := range hits {
-		hits[index], hitDepths[index] = v.castRay(v.rayThrough(turned, origin, region.minX+index%width, region.minY+index/width), origin[2], order)
+		cell, depth := v.castRay(v.rayThrough(turned, origin, region.minX+index%width, region.minY+index/width), origin[2])
+		hits[index], hitDepths[index] = v.shadedColor(cell, order, turned, shades), depth
 	}
 	for index := range hits {
 		value, depth := outlined(hits, hitDepths, width, height, index, outline)
@@ -166,7 +169,7 @@ func (v *Volume) rayThrough(turned orientation, origin [3]float64, x, y int) vox
 	}
 }
 
-func (v *Volume) castRay(ray voxelRay, originDepth float64, order []int) (uint8, float64) {
+func (v *Volume) castRay(ray voxelRay, originDepth float64) (int, float64) {
 	low, high := v.localBounds()
 	enter, exit := math.Inf(-1), math.Inf(1)
 	for axis := range 3 {
@@ -174,17 +177,28 @@ func (v *Volume) castRay(ray voxelRay, originDepth float64, order []int) (uint8,
 		enter, exit = max(enter, axisEnter), min(exit, axisExit)
 	}
 	if enter > exit {
-		return Transparent, math.Inf(1)
+		return noCell, math.Inf(1)
 	}
 	t := enter + rayNudge
 	walk := startWalk(ray, t)
 	for t <= exit {
 		if index := v.indexOf(walk.cell[0]+v.Pivot.X, walk.cell[1]+v.Pivot.Y, walk.cell[2]); index >= 0 && v.cells[index] != Transparent {
-			return v.seenColor(index, order), originDepth + t
+			return index, originDepth + t
 		}
 		t = walk.advance()
 	}
-	return Transparent, math.Inf(1)
+	return noCell, math.Inf(1)
+}
+
+func (v *Volume) shadedColor(cell int, order []int, turned orientation, shades *[256]Shade) uint8 {
+	if cell == noCell {
+		return Transparent
+	}
+	color := v.seenColor(cell, order)
+	if v.normals == nil {
+		return color
+	}
+	return shades[color].pick(color, turned.apply(v.normals[cell]))
 }
 
 func (v *Volume) faceOrder(toward [3]float64) []int {
