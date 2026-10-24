@@ -4,11 +4,17 @@ import (
 	"errors"
 	"fmt"
 	"maps"
+	"slices"
 	"strconv"
 	"strings"
 )
 
 // ===== Types =====
+
+type MoveFile struct {
+	Name   string
+	Source string
+}
 
 type movesParser struct {
 	scripts []MoveScript
@@ -44,16 +50,30 @@ var keyOptions = map[string]func(step *Step, fields []string) (int, error){
 // ===== Public API =====
 
 func ParseMoves(source string) ([]MoveScript, error) {
+	return ParseMoveFiles(MoveFile{Source: source})
+}
+
+func ParseMoveFiles(files ...MoveFile) ([]MoveScript, error) {
 	p := &movesParser{shapes: map[string]map[string]Aim{}}
-	for number, line := range strings.Split(source, "\n") {
-		if err := p.parseLine(strings.TrimSpace(line)); err != nil {
-			return nil, fmt.Errorf("line %d: %w", number+1, err)
+	for _, file := range files {
+		if err := p.parseFile(file); err != nil {
+			return nil, err
 		}
 	}
 	return p.scripts, nil
 }
 
 // ===== Internal =====
+
+func (p *movesParser) parseFile(file MoveFile) error {
+	p.aims, p.step = nil, nil
+	for number, line := range strings.Split(file.Source, "\n") {
+		if err := p.parseLine(strings.TrimSpace(line)); err != nil {
+			return fmt.Errorf("%s: %w", strings.TrimSpace(file.Name+" line "+strconv.Itoa(number+1)), err)
+		}
+	}
+	return nil
+}
 
 func (p *movesParser) parseLine(line string) error {
 	fields := strings.Fields(line)
@@ -71,6 +91,7 @@ func (p *movesParser) readMove(fields []string) error {
 	if len(fields) < 1 || len(fields) > 2 {
 		return errors.New("move needs a name, then loop or once")
 	}
+	p.scripts = slices.DeleteFunc(p.scripts, func(script MoveScript) bool { return script.Name == fields[0] })
 	p.scripts = append(p.scripts, MoveScript{Name: fields[0], IsLooping: len(fields) < 2 || fields[1] != loopNames[false]})
 	p.aims, p.step = nil, nil
 	return nil

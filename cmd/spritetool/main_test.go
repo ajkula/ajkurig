@@ -247,3 +247,29 @@ func TestGetPaletteListsSymbolsAndColors(t *testing.T) {
 		t.Fatalf("the palette should list r as blood red, got %v:\n%s", err, output)
 	}
 }
+
+func TestComposeStacksMoveFilesTheLaterWinning(t *testing.T) {
+	path := writeHero(t)
+	directory := filepath.Dir(path)
+	common, own := filepath.Join(directory, "common.moves"), filepath.Join(directory, "hero.moves")
+	if err := os.WriteFile(common, []byte("move jab once\nkey 3\n  arm_front_upper 0\nmove bow once\nkey 4\n  torso 20\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(own, []byte("move jab once\nkey 5\n  arm_front_upper 0\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	output, err := runTool(t, "compose", path, common, own)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if bow, jab := lineStarting(output, "bow:"), lineStarting(output, "jab:"); bow != "bow: 1 frames, 4 ticks" || jab != "jab: 1 frames, 5 ticks" {
+		t.Fatalf("compose keeps the common bow and the own jab, got %q and %q", bow, jab)
+	}
+	sheet, err := load(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if sheet.FindAnimation("bow") == nil || sheet.FindAnimation("jab") == nil {
+		t.Fatal("both moves are written into the sprite")
+	}
+}

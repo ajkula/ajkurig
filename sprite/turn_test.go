@@ -3,6 +3,7 @@ package sprite
 import (
 	"math"
 	"slices"
+	"strings"
 	"testing"
 )
 
@@ -211,6 +212,44 @@ func TestBadScriptsAreRejected(t *testing.T) {
 		if _, err := ParseMoves(source); err == nil {
 			t.Fatalf("%q is refused", source)
 		}
+	}
+}
+
+func TestLaterMoveFilesReplaceMovesAndReuseShapes(t *testing.T) {
+	common := MoveFile{Name: "common.moves", Source: `
+shape reach
+  arm_front_upper 0
+  arm_front_fore 0
+move jab once
+key 3
+  use reach
+move bow once
+key 4
+  torso 20
+`}
+	own := MoveFile{Name: "hero.moves", Source: `
+move jab once
+key 5
+  use reach
+  head -60
+`}
+	scripts, err := ParseMoveFiles(common, own)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(scripts) != 2 || scripts[0].Name != "bow" || scripts[1].Name != "jab" {
+		t.Fatalf("the hero keeps the common bow and its own jab, got %+v", scripts)
+	}
+	jab := scripts[1].Steps[0]
+	if jab.Ticks != 5 || !jab.Aims["arm_front_upper"].HasDirection || !jab.Aims["head"].HasDirection {
+		t.Fatalf("the own jab replaces the common one and reuses its shape, got %+v", jab)
+	}
+}
+
+func TestMoveFileErrorsNameTheFile(t *testing.T) {
+	_, err := ParseMoveFiles(MoveFile{Name: "common.moves", Source: "move a\nkey 2\n"}, MoveFile{Name: "hero.moves", Source: "move b\nkey 2\nuse nothing\n"})
+	if err == nil || !strings.HasPrefix(err.Error(), "hero.moves line 3:") {
+		t.Fatalf("the error points at hero.moves line 3, got %v", err)
 	}
 }
 

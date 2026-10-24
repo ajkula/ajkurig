@@ -12,6 +12,7 @@ import (
 	"log"
 	"math"
 	"os"
+	"path/filepath"
 	"slices"
 	"strconv"
 	"strings"
@@ -62,7 +63,7 @@ var (
 var commands = map[string]command{
 	"moves":      {"moves [-scale 4] [-wrap 8] hero.spr out.png [move...]", runMoves},
 	"turnaround": {"turnaround [-scale 4] [-step 45] [-snapshot name] hero.spr out.png", runTurnaround},
-	"compose":    {"compose [-split 2] hero.spr moves.txt", runCompose},
+	"compose":    {"compose [-split 2] hero.spr common.moves [hero.moves...]", runCompose},
 	"view":       {"view hero.spr part turn from-turn mirror|keep [width]", runView},
 	"depth":      {"depth hero.spr part depth [part depth...]", runDepth},
 	"parts":      {"parts [-scale 4] hero.spr out.png", runParts},
@@ -197,18 +198,18 @@ func runTurnaround(arguments []string, _ io.Writer) error {
 func runCompose(arguments []string, out io.Writer) error {
 	flags := flag.NewFlagSet("compose", flag.ContinueOnError)
 	split := flags.Int("split", splitTicks, "longest tween kept in one piece, 0 keeps them whole")
-	if err := flags.Parse(arguments); err != nil || flags.NArg() != 2 {
-		return errors.New("needs a sprite and a moves file")
+	if err := flags.Parse(arguments); err != nil || flags.NArg() < 2 {
+		return errors.New("needs a sprite and moves files, the later ones replacing the moves of the earlier ones")
 	}
 	sheet, err := load(flags.Arg(0))
 	if err != nil {
 		return err
 	}
-	source, err := os.ReadFile(flags.Arg(1))
+	files, err := readMoveFiles(flags.Args()[1:])
 	if err != nil {
 		return err
 	}
-	scripts, err := sprite.ParseMoves(string(source))
+	scripts, err := sprite.ParseMoveFiles(files...)
 	if err != nil {
 		return err
 	}
@@ -837,6 +838,18 @@ func paintKeyMark(picture *image.RGBA, isKey bool, x, y, scale int) {
 }
 
 // ===== Files =====
+
+func readMoveFiles(paths []string) ([]sprite.MoveFile, error) {
+	files := make([]sprite.MoveFile, len(paths))
+	for index, path := range paths {
+		source, err := os.ReadFile(path)
+		if err != nil {
+			return nil, err
+		}
+		files[index] = sprite.MoveFile{Name: filepath.Base(path), Source: string(source)}
+	}
+	return files, nil
+}
 
 func load(path string) (*sprite.Sheet, error) {
 	data, err := os.ReadFile(path)
