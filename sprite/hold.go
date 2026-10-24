@@ -68,13 +68,9 @@ func readHold(fields []string) (Hold, error) {
 	if !isKnown || len(fields) != 4 {
 		return Hold{}, fmt.Errorf("a partner is placed like: hold x depth height, or: release x depth height, got %q", fields)
 	}
-	values := [3]float64{}
-	for index := range values {
-		value, err := strconv.ParseFloat(fields[index+1], 64)
-		if err != nil {
-			return Hold{}, fmt.Errorf("bad partner offset %q", fields[index+1])
-		}
-		values[index] = value
+	values, err := readFloats(fields[1:])
+	if err != nil {
+		return Hold{}, fmt.Errorf("bad partner offset: %w", err)
 	}
 	return Hold{Grip: grip, X: values[0], Depth: values[1], Height: values[2]}, nil
 }

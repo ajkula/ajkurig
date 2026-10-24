@@ -39,10 +39,12 @@ type Part struct {
 	LimitedAxes uint8
 	Depth       int
 	IsSolid     bool
+	Body        *Body
 	*Layer
-	Views     []*View
-	volume    *Volume
-	volumeKey []volumeSource
+	Views      []*View
+	volume     *Volume
+	volumeKey  []volumeSource
+	bodySource bodySource
 }
 
 type FrameKind uint8
@@ -161,7 +163,7 @@ func (s *Sheet) AddPart(name string, parent int, pivot Point) int {
 func (s *Sheet) DuplicatePart(index int) int {
 	source := s.Parts[index]
 	copied := s.newPart(source.Name, source.Parent, source.Pivot)
-	copied.Tip, copied.Limits, copied.LimitedAxes, copied.Depth, copied.IsSolid = source.Tip, source.Limits, source.LimitedAxes, source.Depth, source.IsSolid
+	copied.Tip, copied.Limits, copied.LimitedAxes, copied.Depth, copied.IsSolid, copied.Body = source.Tip, source.Limits, source.LimitedAxes, source.Depth, source.IsSolid, source.Body
 	copied.Layer = source.Layer.Clone()
 	for _, view := range source.Views {
 		copied.Views = append(copied.Views, &View{Turn: view.Turn, Tilt: view.Tilt, Name: view.Name, Layer: view.Layer.Clone()})
@@ -266,7 +268,7 @@ func (s *Sheet) RenderSelectionIn(pose Pose, isShown func(index int) bool, area 
 		if !isShown(index) {
 			continue
 		}
-		partStampers[boolToInt(s.Parts[index].IsSolid)](s, index, area, target, outline)
+		partStampers[boolToInt(s.Parts[index].isVolume())](s, index, area, target, outline)
 	}
 }
 

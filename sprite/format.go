@@ -45,6 +45,7 @@ var directives = map[string]func(p *parser, fields []string) error{
 	"limit":    (*parser).readLimit,
 	"depth":    (*parser).readDepth,
 	"solid":    (*parser).readSolid,
+	"body":     (*parser).readBody,
 	"view":     (*parser).readView,
 	"pixels":   (*parser).readPixels,
 	"anim":     (*parser).readAnimation,
@@ -242,6 +243,19 @@ func (p *parser) readSolid(fields []string) error {
 	return nil
 }
 
+func (p *parser) readBody(fields []string) error {
+	if p.part == nil || len(fields) != 4 || len(fields[3]) != 1 {
+		return errors.New("body belongs to a part and needs a start width, an end width, a depth ratio and a colour, like: body 6 4 0.8 k")
+	}
+	widths, err := readFloats(fields[:3])
+	color := p.symbols[fields[3][0]]
+	if err != nil || widths[0] <= 0 || widths[1] <= 0 || widths[2] <= 0 || color <= int16(Transparent) {
+		return fmt.Errorf("body needs positive widths and depth ratio and a palette colour, got %q", strings.Join(fields, " "))
+	}
+	p.part.Body = &Body{StartWidth: widths[0], EndWidth: widths[1], DepthRatio: widths[2], Color: uint8(color)}
+	return nil
+}
+
 func (p *parser) readView(fields []string) error {
 	if p.part == nil || len(fields) < 1 || len(fields) > 3 {
 		return errors.New("view belongs to a part and needs a turn angle, like: view 90, then an optional tilt and drawing name, like: view 0 90 top")
@@ -414,6 +428,11 @@ func (p *parser) finish() error {
 	if len(p.sheet.Animations) == 0 {
 		p.sheet.Animations = []*Animation{NewAnimation("idle")}
 	}
+	for _, part := range p.sheet.Parts {
+		if part.Body != nil {
+			part.drawSilhouette()
+		}
+	}
 	return nil
 }
 
@@ -459,6 +478,18 @@ func readInts(fields []string, count int) ([]int, error) {
 	return values, nil
 }
 
+func readFloats(fields []string) ([]float64, error) {
+	values := make([]float64, len(fields))
+	for index, field := range fields {
+		value, err := strconv.ParseFloat(field, 64)
+		if err != nil {
+			return nil, fmt.Errorf("%q is not a number", field)
+		}
+		values[index] = value
+	}
+	return values, nil
+}
+
 func writePart(builder *strings.Builder, sheet *Sheet, part *Part) {
 	parentName := noParentName
 	if part.Parent != NoParent {
@@ -472,6 +503,10 @@ func writePart(builder *strings.Builder, sheet *Sheet, part *Part) {
 		fmt.Fprintf(builder, "depth %d\n", part.Depth)
 	}
 	builder.WriteString([2]string{"", "solid\n"}[boolToInt(part.IsSolid)])
+	if part.Body != nil {
+		fmt.Fprintf(builder, "body %s %s %s %c\n", formatOffset(part.Body.StartWidth), formatOffset(part.Body.EndWidth), formatOffset(part.Body.DepthRatio), sheet.Palette[part.Body.Color].Symbol)
+		return
+	}
 	writePixels(builder, sheet, part.Layer)
 	for _, view := range part.Views {
 		fmt.Fprintf(builder, "view %s%s%s\n", strconv.FormatFloat(view.Turn, 'f', -1, 64), [2]string{"", " " + strconv.FormatFloat(view.Tilt, 'f', -1, 64)}[boolToInt(view.Tilt != 0)], [2]string{"", " " + view.Name}[boolToInt(view.Name != "")])

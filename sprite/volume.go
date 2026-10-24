@@ -107,6 +107,9 @@ func (v *Volume) Each(visit func(x, y, z int, value uint8)) {
 // ===== Rendering =====
 
 func (p *Part) solidVolume() *Volume {
+	if p.Body != nil {
+		return p.bodyVolume()
+	}
 	key := append(p.volumeKey[:0:0], volumeSource{p.Layer, p.Layer.revision, 0, 0, ""})
 	for _, view := range p.Views {
 		key = append(key, volumeSource{view.Layer, view.Layer.revision, view.Turn, view.Tilt, view.Name})
