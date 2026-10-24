@@ -347,15 +347,19 @@ func (p *parser) readSnapshot(fields []string) error {
 }
 
 func (p *parser) readFrame(fields []string) error {
-	if p.animation == nil || len(fields) != 2 {
-		return errors.New("frame belongs to an animation and needs a kind and a duration, like: frame key 6")
+	if p.animation == nil || (len(fields) != 2 && len(fields) != 6) {
+		return errors.New("frame belongs to an animation and needs a kind and a duration, like: frame key 6, then an optional partner like: hold 14 0 6")
 	}
 	kind, isKnown := frameKinds[fields[0]]
 	ticks, err := strconv.Atoi(fields[1])
 	if !isKnown || err != nil || ticks < 1 {
 		return errors.New("frame kind is key or tween, duration is at least 1 tick")
 	}
-	p.animation.Frames = append(p.animation.Frames, Frame{Kind: kind, Ticks: ticks})
+	hold, holdErr := readFrameHold(kind, fields[2:])
+	if holdErr != nil {
+		return holdErr
+	}
+	p.animation.Frames = append(p.animation.Frames, Frame{Kind: kind, Ticks: ticks, Hold: hold})
 	p.frame = &p.animation.Frames[len(p.animation.Frames)-1]
 	return nil
 }
@@ -491,7 +495,7 @@ func writeAnimation(builder *strings.Builder, sheet *Sheet, animation *Animation
 }
 
 func writeFrame(builder *strings.Builder, sheet *Sheet, frame *Frame) {
-	fmt.Fprintf(builder, "frame %s %d\n", FrameKindNames[frame.Kind], frame.Ticks)
+	fmt.Fprintf(builder, "frame %s %d%s\n", FrameKindNames[frame.Kind], frame.Ticks, holdText(frame.Hold))
 	for index, joint := range frame.Pose {
 		writeJointIf(builder, sheet, index, joint, frame.Kind == FrameKey && index < len(sheet.Parts) && joint != Joint{})
 	}

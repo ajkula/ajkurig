@@ -1383,3 +1383,18 @@ func TestSnapshotThumbnailsShowPaintOutsideTheCanvas(t *testing.T) {
 		t.Fatalf("a snapshot thumbnail should reach the paint left of the canvas, area %+v", thumbnail.area)
 	}
 }
+
+func TestAKeyAddedDuringAHoldKeepsThePartnerHeld(t *testing.T) {
+	editor := newTestEditor(t)
+	held := func(height float64) sprite.Hold { return sprite.Hold{Grip: sprite.GripHeld, X: 14, Height: height} }
+	editor.sheet.Animations[editor.animationIndex] = &sprite.Animation{Name: "lift", Frames: []sprite.Frame{
+		{Kind: sprite.FrameKey, Ticks: 4, Hold: held(0)},
+		{Kind: sprite.FrameTween, Ticks: 4},
+		{Kind: sprite.FrameKey, Ticks: 4, Hold: held(6)},
+	}}
+	editor.frameIndex = 1
+	editor.insertFrame(sprite.FrameKey)
+	if added := editor.currentAnimation().Frames[2].Hold; added != held(3) {
+		t.Fatalf("the added key holds the partner where the tween carried it, got %+v", added)
+	}
+}

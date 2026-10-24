@@ -90,6 +90,7 @@ func (e *Editor) insertFrame(kind sprite.FrameKind) {
 	frame := sprite.Frame{Kind: kind, Ticks: e.currentFrame().Ticks}
 	if kind == sprite.FrameKey {
 		frame.Pose = e.sheet.FramePose(animation, e.frameIndex)
+		frame.Hold = keptHold(animation.FrameHold(e.frameIndex))
 	}
 	animation.Frames = slices.Insert(animation.Frames, e.frameIndex+1, frame)
 	e.frameIndex++
@@ -191,4 +192,11 @@ func swatchColor(swatch sprite.Swatch, index uint8) color.Color {
 		return colorCheckerB
 	}
 	return color.NRGBA{swatch.Color[0], swatch.Color[1], swatch.Color[2], 255}
+}
+
+func keptHold(hold sprite.Hold) sprite.Hold {
+	if hold.Grip != sprite.GripHeld {
+		return sprite.Hold{}
+	}
+	return hold
 }

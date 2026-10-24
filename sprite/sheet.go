@@ -51,6 +51,7 @@ type Frame struct {
 	Kind  FrameKind
 	Ticks int
 	Pose  Pose
+	Hold  Hold
 	Baked *Layer
 }
 
@@ -233,10 +234,10 @@ func (s *Sheet) FramePose(animation *Animation, index int) Pose {
 	if frame.Kind == FrameKey {
 		return s.blend(frame.Pose, frame.Pose, 0)
 	}
-	previous, before, hasPrevious := animation.findKey(index, -1)
-	next, after, hasNext := animation.findKey(index, 1)
-	previous = choosePose(hasPrevious, previous, next)
-	next = choosePose(hasNext, next, previous)
+	previousKey, before, hasPrevious := animation.findKey(index, -1)
+	nextKey, after, hasNext := animation.findKey(index, 1)
+	previous := choosePose(hasPrevious, poseOf(previousKey), poseOf(nextKey))
+	next := choosePose(hasNext, poseOf(nextKey), previous)
 	return s.blend(previous, next, float64(before)/float64(before+after))
 }
 
@@ -453,7 +454,7 @@ func (p stamp) row(y, from, to, left int, pixels []uint8, depths []float64) {
 
 var samplers = [2]func(*Layer, float64, float64) uint8{(*Layer).sampleSmooth, (*Layer).sampleExact}
 
-func (a *Animation) findKey(index, direction int) (Pose, int, bool) {
+func (a *Animation) findKey(index, direction int) (*Frame, int, bool) {
 	count := len(a.Frames)
 	for distance := 1; distance < count; distance++ {
 		position := index + direction*distance
@@ -463,7 +464,7 @@ func (a *Animation) findKey(index, direction int) (Pose, int, bool) {
 		}
 		frame := &a.Frames[(position%count+count)%count]
 		if frame.Kind == FrameKey {
-			return frame.Pose, distance, true
+			return frame, distance, true
 		}
 	}
 	return nil, 1, false
@@ -486,6 +487,13 @@ func frameAt(frames []Frame, tick int, isLooping bool) int {
 
 func isEveryPart(int) bool {
 	return true
+}
+
+func poseOf(frame *Frame) Pose {
+	if frame == nil {
+		return nil
+	}
+	return frame.Pose
 }
 
 func choosePose(isChosen bool, chosen, fallback Pose) Pose {

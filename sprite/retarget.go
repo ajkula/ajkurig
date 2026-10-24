@@ -18,7 +18,7 @@ func (s *Sheet) RetargetPose(source *Sheet, pose Pose) Pose {
 func (s *Sheet) ImportAnimation(source *Sheet, animation *Animation) *Animation {
 	imported := &Animation{Name: animation.Name, IsLooping: animation.IsLooping, Frames: make([]Frame, len(animation.Frames))}
 	for index, frame := range animation.Frames {
-		imported.Frames[index] = Frame{Kind: frame.Kind, Ticks: frame.Ticks, Pose: s.retargetFrame(source, frame)}
+		imported.Frames[index] = Frame{Kind: frame.Kind, Ticks: frame.Ticks, Pose: s.retargetFrame(source, frame), Hold: frame.Hold}
 	}
 	return imported
 }

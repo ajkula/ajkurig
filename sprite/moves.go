@@ -39,12 +39,14 @@ var aimOptions = map[string]func(aim *Aim, value string) error{
 }
 
 var keyOptions = map[string]func(step *Step, fields []string) (int, error){
-	"plant": readPlant,
-	"brace": readBrace,
-	"at":    readPlantX,
-	"lift":  readLift,
-	"lead":  readLead,
-	"knee":  readKnee,
+	"plant":   readPlant,
+	"brace":   readBrace,
+	"at":      readPlantX,
+	"lift":    readLift,
+	"lead":    readLead,
+	"knee":    readKnee,
+	"hold":    readGripOf("hold"),
+	"release": readGripOf("release"),
 }
 
 // ===== Public API =====
@@ -118,7 +120,7 @@ func (p *movesParser) readKey(fields []string) error {
 	for rest := fields[1:]; len(rest) > 0; {
 		read, isKnown := keyOptions[rest[0]]
 		if !isKnown {
-			return fmt.Errorf("unknown key option %q (plant, brace, knee, at, lift, lead)", rest[0])
+			return fmt.Errorf("unknown key option %q (plant, brace, knee, at, lift, lead, hold, release)", rest[0])
 		}
 		used, err := read(&step, rest[1:])
 		if err != nil {

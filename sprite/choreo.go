@@ -32,6 +32,7 @@ type Step struct {
 	Lift        Point
 	Lead        float64
 	IsLeant     bool
+	Hold        Hold
 }
 
 type MoveScript struct {
@@ -56,7 +57,7 @@ const (
 func (s *Sheet) Compose(script MoveScript) *Animation {
 	animation := &Animation{Name: script.Name, IsLooping: script.IsLooping}
 	for _, step := range script.Steps {
-		frame := Frame{Kind: step.Kind, Ticks: step.Ticks}
+		frame := Frame{Kind: step.Kind, Ticks: step.Ticks, Hold: step.Hold}
 		if step.Kind == FrameKey {
 			frame.Pose = s.Arrange(step)
 		}
