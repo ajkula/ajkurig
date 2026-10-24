@@ -29,6 +29,11 @@ Each step is test-driven: write the failing tests listed, make them pass, keep e
 - [x] A `.body` text file describes proportions (height, leg length, head scale) and every part's shape and clothes; `spritetool build hero.spr suit.body micron.body` creates or updates a humanoid, the later files overriding the earlier ones, and keeps the drawn head and its views.
   - Tests: building twice gives the same sprite; a drawn head survives a rebuild; the common moves compose on a built body with the feet planted.
 
-## 6. First built character
+## 6. Contacts
+
+- [x] Body volumes rest on each other instead of crossing: parts joined through bodiless joints touch only around that joint; the part farther from the root yields with the smallest swing within its anatomy limits. The build bakes a contact-free rest pose; every composed key is settled before the feet are planted, braced and planted legs never move.
+  - Tests: after the build only joints touch; a folded forearm touches its upper arm past the elbow; the arm rests on a belly while the legs stay straight; an arm aimed through the belly stops on it; drawn sprites are never settled.
+
+## 7. First built character
 
 - [ ] One character built from a body file and a drawn head, with common moves composed on it, shown on a perspective floor at near and far depth.

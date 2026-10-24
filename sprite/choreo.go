@@ -204,6 +204,7 @@ func (s *Sheet) placeStep(step Step, lean float64, steady []bool) Pose {
 	if root < 0 {
 		return pose
 	}
+	s.Settle(pose, func(index int) bool { return steady[index] })
 	pose[root].Shift = step.Lift
 	s.plant(pose, step, planted)
 	return pose

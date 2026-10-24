@@ -8,16 +8,17 @@ import (
 // ===== Types =====
 
 type Volume struct {
-	Pivot   Point
-	MinX    int
-	MinY    int
-	MinZ    int
-	Width   int
-	Height  int
-	Depth   int
-	cells   []uint8
-	faces   []voxelFace
-	normals [][3]float64
+	Pivot      Point
+	MinX       int
+	MinY       int
+	MinZ       int
+	Width      int
+	Height     int
+	Depth      int
+	cells      []uint8
+	faces      []voxelFace
+	normals    [][3]float64
+	solidCells []int
 }
 
 type voxelFace struct {

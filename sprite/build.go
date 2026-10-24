@@ -33,6 +33,7 @@ const (
 	GuardTurn          = 45
 	shoulderDropShare  = 0.15
 	hipsRootLength     = 2
+	restSettlePasses   = 2
 	missingSize        = -1
 	proportionsMissing = "the body files never give: "
 )
@@ -212,6 +213,23 @@ func (p *bodyPlan) apply() {
 	for _, part := range s.Parts {
 		p.dress(part)
 	}
+	for range restSettlePasses {
+		p.settleRest()
+	}
+}
+
+func (p *bodyPlan) settleRest() {
+	s := p.sheet
+	pose := s.Grow(nil)
+	s.Settle(pose, s.carriesDrawing)
+	ends := s.BoneEnds(s.Transforms(pose))
+	for index, part := range s.Parts {
+		if part.isDrawn() {
+			continue
+		}
+		part.Pivot, part.Tip = pixelUnder(ends[index][0]), pixelUnder(ends[index][1])
+		p.dress(part)
+	}
 }
 
 func (p *bodyPlan) dress(part *Part) {
@@ -250,12 +268,23 @@ func (p *bodyPlan) place(name string, pivot, tip Point, depth int) {
 	}
 	part := p.sheet.Parts[index]
 	part.Depth = depth
-	isDrawn := part.Body == nil && p.bodies[name] == nil && part.Layer.Area().Width > 0
-	if isDrawn {
+	if p.bodies[name] == nil && part.isDrawn() {
 		part.Translate(pivot.X-part.Pivot.X, pivot.Y-part.Pivot.Y)
 		return
 	}
 	part.Pivot, part.Tip = pivot, tip
+}
+
+func (s *Sheet) carriesDrawing(index int) bool {
+	return slices.ContainsFunc(s.Parts, func(part *Part) bool { return part.isDrawn() && s.isAncestor(index, slices.Index(s.Parts, part)) })
+}
+
+func (p *Part) isDrawn() bool {
+	return p.Body == nil && p.Layer.Area().Width > 0
+}
+
+func pixelUnder(point [2]float64) Point {
+	return Point{int(math.Floor(point[0])), int(math.Floor(point[1]))}
 }
 
 func guardOffset(width int, isNear bool) (int, int) {
