@@ -49,6 +49,7 @@ var directives = map[string]func(p *parser, fields []string) error{
 	"solid":    (*parser).readSolid,
 	"body":     (*parser).readBody,
 	"band":     (*parser).readBand,
+	"lump":     (*parser).readLump,
 	"view":     (*parser).readView,
 	"pixels":   (*parser).readPixels,
 	"anim":     (*parser).readAnimation,
@@ -289,6 +290,18 @@ func (p *parser) readBand(fields []string) error {
 		return fmt.Errorf("band needs numbers and a palette colour, got %q", strings.Join(fields, " "))
 	}
 	p.part.Body.Bands = append(p.part.Body.Bands, Band{From: stretch[0], To: stretch[1], Color: uint8(color), Around: sector[0], HalfAngle: sector[1]})
+	return nil
+}
+
+func (p *parser) readLump(fields []string) error {
+	if p.part == nil || p.part.Body == nil || len(fields) != 6 {
+		return errors.New("lump belongs to a body and needs where it sits along the bone, its angle and distance around it, then its three radii, like: lump 0.4 0 3 4 6 5")
+	}
+	values, err := readFloats(fields)
+	if err != nil || min(values[3], values[4], values[5]) <= 0 {
+		return fmt.Errorf("lump needs numbers and positive radii, got %q", strings.Join(fields, " "))
+	}
+	p.part.Body.Lumps = append(p.part.Body.Lumps, Lump{At: values[0], Around: values[1], Out: values[2], Along: values[3], Across: values[4], Outward: values[5]})
 	return nil
 }
 
@@ -542,6 +555,7 @@ func writePart(builder *strings.Builder, sheet *Sheet, part *Part) {
 	if part.Body != nil {
 		fmt.Fprintf(builder, "body %s %s %s %c\n", formatOffset(part.Body.StartWidth), formatOffset(part.Body.EndWidth), formatOffset(part.Body.DepthRatio), sheet.Palette[part.Body.Color].Symbol)
 		writeBands(builder, sheet, part.Body.Bands)
+		writeLumps(builder, part.Body.Lumps)
 		return
 	}
 	writePixels(builder, sheet, part.Layer)
@@ -558,6 +572,12 @@ func writeBands(builder *strings.Builder, sheet *Sheet, bands []Band) {
 			fmt.Fprintf(builder, " around %s %s", formatOffset(band.Around), formatOffset(band.HalfAngle))
 		}
 		builder.WriteString("\n")
+	}
+}
+
+func writeLumps(builder *strings.Builder, lumps []Lump) {
+	for _, lump := range lumps {
+		fmt.Fprintf(builder, "lump %s %s %s %s %s %s\n", formatOffset(lump.At), formatOffset(lump.Around), formatOffset(lump.Out), formatOffset(lump.Along), formatOffset(lump.Across), formatOffset(lump.Outward))
 	}
 }
 

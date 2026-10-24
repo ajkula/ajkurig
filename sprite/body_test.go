@@ -208,3 +208,66 @@ func TestShadesAreWrittenAndReadBack(t *testing.T) {
 		t.Fatal("the shade of the arm colour reads back")
 	}
 }
+
+func shape(sheet *Sheet, lumps ...Lump) {
+	body := *sheet.Parts[0].Body
+	body.Lumps = lumps
+	sheet.Parts[0].SetBody(body)
+}
+
+func rowWidth(pixels []uint8, row int, color uint8) int {
+	return len(rowColors(pixels, row, []uint8{color}))
+}
+
+func TestABellyWidensTheBodyOnlyInFront(t *testing.T) {
+	sheet, color := bodySheet(t)
+	shape(sheet, Lump{At: 0.5, Around: 0, Out: 2, Along: 4, Across: 3, Outward: 4})
+	front, side := renderTurned(sheet, 0, 0), renderTurned(sheet, 90, 0)
+	if width := rowWidth(front, 24, color); !isAbout(width, 8) {
+		t.Fatalf("seen from the front the belly keeps the body 8 wide, got %d", width)
+	}
+	if chest, belly := rowWidth(side, 16, color), rowWidth(side, 24, color); belly < chest+2 {
+		t.Fatalf("in profile the belly sticks out, got %d at the chest and %d at the belly", chest, belly)
+	}
+}
+
+func TestAFistIsWiderThanItsForearm(t *testing.T) {
+	sheet, color := bodySheet(t)
+	shape(sheet, Lump{At: 1, Around: 0, Out: 0, Along: 3, Across: 6, Outward: 3})
+	pixels := renderTurned(sheet, 0, 0)
+	if forearm, fist := rowWidth(pixels, 24, color), rowWidth(pixels, 34, color); fist < forearm+2 {
+		t.Fatalf("the fist is wider than the forearm, got %d and %d", fist, forearm)
+	}
+}
+
+func TestLumpsAreWrittenAndReadBack(t *testing.T) {
+	sheet, _ := bodySheet(t)
+	shape(sheet, Lump{At: 0.5, Around: 10, Out: 2, Along: 4, Across: 3, Outward: 4.5})
+	read, err := Parse(Write(sheet))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !reflect.DeepEqual(read.Parts[0].Body, sheet.Parts[0].Body) {
+		t.Fatalf("lumps read back as %+v", read.Parts[0].Body.Lumps)
+	}
+}
+
+func TestALumpAroundZeroSitsOnTheFrontLikeAFrontBand(t *testing.T) {
+	sheet, colors := clothedArm(t)
+	dress(sheet, colors[0], Band{From: 0, To: 1, Color: colors[1], Around: 0, HalfAngle: 40})
+	shape(sheet, Lump{At: 0.5, Around: 0, Out: 3, Along: 4, Across: 3, Outward: 4})
+	row := renderTurned(sheet, 90, 0)[24*bodyCanvas : 25*bodyCanvas]
+	first, last := bodyCanvas, -1
+	for x, value := range row {
+		if value == colors[0] || value == colors[1] {
+			first, last = min(first, x), max(last, x)
+		}
+	}
+	if last < 0 || (row[first] == colors[1]) == (row[last] == colors[1]) {
+		t.Fatalf("one edge of the profile shows the front band, got %v", row)
+	}
+	frontReach, backReach := [2]int{last - 24, 24 - first}[boolToInt(row[first] == colors[1])], [2]int{24 - first, last - 24}[boolToInt(row[first] == colors[1])]
+	if frontReach < backReach+2 {
+		t.Fatalf("the belly bulges on the front band side, reaching %d in front and %d behind", frontReach, backReach)
+	}
+}

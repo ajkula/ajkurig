@@ -21,7 +21,7 @@ Each step is test-driven: write the failing tests listed, make them pass, keep e
 
 ## 4. Body shapes
 
-- [ ] Torso and pelvis shapes: shoulder and hip widths, belly and chest bulges; hands and feet as end blobs (fist, glove, shoe).
+- [x] Torso and pelvis shapes: shoulder and hip widths, belly and chest bulges; hands and feet as end blobs (fist, glove, shoe).
   - Tests: a belly bulge widens the torso only in front; a fist is wider than its forearm.
 
 ## 5. Body files
