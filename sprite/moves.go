@@ -11,7 +11,7 @@ import (
 
 // ===== Types =====
 
-type MoveFile struct {
+type TextFile struct {
 	Name   string
 	Source string
 }
@@ -52,10 +52,10 @@ var keyOptions = map[string]func(step *Step, fields []string) (int, error){
 // ===== Public API =====
 
 func ParseMoves(source string) ([]MoveScript, error) {
-	return ParseMoveFiles(MoveFile{Source: source})
+	return ParseMoveFiles(TextFile{Source: source})
 }
 
-func ParseMoveFiles(files ...MoveFile) ([]MoveScript, error) {
+func ParseMoveFiles(files ...TextFile) ([]MoveScript, error) {
 	p := &movesParser{shapes: map[string]map[string]Aim{}}
 	for _, file := range files {
 		if err := p.parseFile(file); err != nil {
@@ -67,7 +67,7 @@ func ParseMoveFiles(files ...MoveFile) ([]MoveScript, error) {
 
 // ===== Internal =====
 
-func (p *movesParser) parseFile(file MoveFile) error {
+func (p *movesParser) parseFile(file TextFile) error {
 	p.aims, p.step = nil, nil
 	for number, line := range strings.Split(file.Source, "\n") {
 		if err := p.parseLine(strings.TrimSpace(line)); err != nil {

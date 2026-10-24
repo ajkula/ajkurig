@@ -26,7 +26,7 @@ Each step is test-driven: write the failing tests listed, make them pass, keep e
 
 ## 5. Body files
 
-- [ ] A `.body` text file describes proportions (height, leg length, head scale) and every part's shape and clothes; `spritetool build hero.spr suit.body micron.body` creates or updates a humanoid, the later files overriding the earlier ones, and keeps the drawn head and its views.
+- [x] A `.body` text file describes proportions (height, leg length, head scale) and every part's shape and clothes; `spritetool build hero.spr suit.body micron.body` creates or updates a humanoid, the later files overriding the earlier ones, and keeps the drawn head and its views.
   - Tests: building twice gives the same sprite; a drawn head survives a rebuild; the common moves compose on a built body with the feet planted.
 
 ## 6. First caricature

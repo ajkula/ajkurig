@@ -271,3 +271,16 @@ func TestALumpAroundZeroSitsOnTheFrontLikeAFrontBand(t *testing.T) {
 		t.Fatalf("the belly bulges on the front band side, reaching %d in front and %d behind", frontReach, backReach)
 	}
 }
+
+func TestAroundNinetyIsScreenRightWhicheverWayTheBonePoints(t *testing.T) {
+	for _, flip := range []bool{false, true} {
+		sheet, colors := clothedArm(t)
+		arm := sheet.Parts[0]
+		arm.Pivot, arm.Tip = [2]Point{{24, 14}, {24, 34}}[boolToInt(flip)], [2]Point{{24, 34}, {24, 14}}[boolToInt(flip)]
+		dress(sheet, colors[0], Band{From: 0, To: 1, Color: colors[1], Around: 90, HalfAngle: 40})
+		row := rowColors(renderTurned(sheet, 0, 0), 24, colors[:2])
+		if len(row) == 0 || row[0] != colors[0] || row[len(row)-1] != colors[1] {
+			t.Fatalf("the band around 90 is on the right of a bone pointing %s, got %v", [2]string{"down", "up"}[boolToInt(flip)], row)
+		}
+	}
+}

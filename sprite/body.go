@@ -33,6 +33,14 @@ type Band struct {
 	HalfAngle float64
 }
 
+type boneAxis struct {
+	x      float64
+	y      float64
+	length float64
+	sideX  float64
+	sideY  float64
+}
+
 type bodySource struct {
 	body  Body
 	pivot Point
@@ -62,8 +70,8 @@ func (p *Part) bodyVolume() *Volume {
 }
 
 func (b Body) fill(pivot, tip Point) *Volume {
-	boneX, boneY := float64(tip.X-pivot.X), float64(tip.Y-pivot.Y)
-	length := math.Hypot(boneX, boneY)
+	bone := axisOf(pivot, tip)
+	length := bone.length
 	widest := max(b.StartWidth, b.EndWidth) / 2
 	for _, lump := range b.Lumps {
 		widest = max(widest, lump.Out+max(lump.Along, lump.Across, lump.Outward)+max(lump.At-1, -lump.At, 0)*length)
@@ -74,16 +82,25 @@ func (b Body) fill(pivot, tip Point) *Volume {
 	volume.cells = make([]uint8, volume.Width*volume.Height*volume.Depth)
 	for index := range volume.cells {
 		x, y, z := volume.coordinates(index)
-		volume.cells[index] = b.colorAt(float64(x-pivot.X), float64(y-pivot.Y), float64(z), boneX, boneY, length)
+		volume.cells[index] = b.colorAt(float64(x-pivot.X), float64(y-pivot.Y), float64(z), bone)
 	}
 	volume.computeNormals()
 	return volume
 }
 
-func (b Body) colorAt(x, y, z, boneX, boneY, length float64) uint8 {
+func axisOf(pivot, tip Point) boneAxis {
+	x, y := float64(tip.X-pivot.X), float64(tip.Y-pivot.Y)
+	length := math.Hypot(x, y)
+	isFlipped := y < 0 || (y == 0 && x > 0)
+	sign := float64(1-2*boolToInt(isFlipped)) / max(length, 1)
+	return boneAxis{x, y, length, y * sign, -x * sign}
+}
+
+func (b Body) colorAt(x, y, z float64, bone boneAxis) uint8 {
+	length := bone.length
 	along, side := 0.0, math.Hypot(x, y)
 	if length > 0 {
-		along, side = (x*boneX+y*boneY)/length, (x*boneY-y*boneX)/length
+		along, side = (x*bone.x+y*bone.y)/length, x*bone.sideX+y*bone.sideY
 	}
 	reached := math.Min(math.Max(along, 0), length)
 	progress := reached / max(length, 1)

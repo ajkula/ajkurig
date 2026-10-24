@@ -216,7 +216,7 @@ func TestBadScriptsAreRejected(t *testing.T) {
 }
 
 func TestLaterMoveFilesReplaceMovesAndReuseShapes(t *testing.T) {
-	common := MoveFile{Name: "common.moves", Source: `
+	common := TextFile{Name: "common.moves", Source: `
 shape reach
   arm_front_upper 0
   arm_front_fore 0
@@ -227,7 +227,7 @@ move bow once
 key 4
   torso 20
 `}
-	own := MoveFile{Name: "hero.moves", Source: `
+	own := TextFile{Name: "hero.moves", Source: `
 move jab once
 key 5
   use reach
@@ -247,7 +247,7 @@ key 5
 }
 
 func TestMoveFileErrorsNameTheFile(t *testing.T) {
-	_, err := ParseMoveFiles(MoveFile{Name: "common.moves", Source: "move a\nkey 2\n"}, MoveFile{Name: "hero.moves", Source: "move b\nkey 2\nuse nothing\n"})
+	_, err := ParseMoveFiles(TextFile{Name: "common.moves", Source: "move a\nkey 2\n"}, TextFile{Name: "hero.moves", Source: "move b\nkey 2\nuse nothing\n"})
 	if err == nil || !strings.HasPrefix(err.Error(), "hero.moves line 3:") {
 		t.Fatalf("the error points at hero.moves line 3, got %v", err)
 	}

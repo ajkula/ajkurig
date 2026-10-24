@@ -9,6 +9,7 @@ import (
 	"image/draw"
 	"image/png"
 	"io"
+	"io/fs"
 	"log"
 	"math"
 	"os"
@@ -52,6 +53,7 @@ const (
 	cellMargin    = 6
 	splitTicks    = 2
 	turnaroundCut = 45
+	newSpriteSize = 64
 )
 
 var (
@@ -64,6 +66,7 @@ var commands = map[string]command{
 	"moves":      {"moves [-scale 4] [-wrap 8] hero.spr out.png [move...]", runMoves},
 	"turnaround": {"turnaround [-scale 4] [-step 45] [-snapshot name] hero.spr out.png", runTurnaround},
 	"compose":    {"compose [-split 2] hero.spr common.moves [hero.moves...]", runCompose},
+	"build":      {"build hero.spr common.body [hero.body...]", runBuild},
 	"view":       {"view hero.spr part turn from-turn mirror|keep [width]", runView},
 	"depth":      {"depth hero.spr part depth [part depth...]", runDepth},
 	"parts":      {"parts [-scale 4] hero.spr out.png", runParts},
@@ -205,7 +208,7 @@ func runCompose(arguments []string, out io.Writer) error {
 	if err != nil {
 		return err
 	}
-	files, err := readMoveFiles(flags.Args()[1:])
+	files, err := readTextFiles(flags.Args()[1:])
 	if err != nil {
 		return err
 	}
@@ -225,6 +228,31 @@ func runCompose(arguments []string, out io.Writer) error {
 		fmt.Fprintf(out, "%s: %d frames, %d ticks\n", animation.Name, len(animation.Frames), animation.Duration())
 	}
 	return store(flags.Arg(0), sheet)
+}
+
+func runBuild(arguments []string, out io.Writer) error {
+	if len(arguments) < 2 {
+		return errors.New("needs a sprite and body files, the later ones overriding the earlier ones")
+	}
+	sheet, err := loadOrCreate(arguments[0])
+	if err != nil {
+		return err
+	}
+	files, err := readTextFiles(arguments[1:])
+	if err != nil {
+		return err
+	}
+	if err := sheet.Build(files...); err != nil {
+		return err
+	}
+	bodies := 0
+	for _, part := range sheet.Parts {
+		if part.Body != nil {
+			bodies++
+		}
+	}
+	fmt.Fprintf(out, "%s: %d parts with a body, %d colours\n", sheet.Name, bodies, len(sheet.Palette)-1)
+	return store(arguments[0], sheet)
 }
 
 func runView(arguments []string, _ io.Writer) error {
@@ -839,16 +867,23 @@ func paintKeyMark(picture *image.RGBA, isKey bool, x, y, scale int) {
 
 // ===== Files =====
 
-func readMoveFiles(paths []string) ([]sprite.MoveFile, error) {
-	files := make([]sprite.MoveFile, len(paths))
+func readTextFiles(paths []string) ([]sprite.TextFile, error) {
+	files := make([]sprite.TextFile, len(paths))
 	for index, path := range paths {
 		source, err := os.ReadFile(path)
 		if err != nil {
 			return nil, err
 		}
-		files[index] = sprite.MoveFile{Name: filepath.Base(path), Source: string(source)}
+		files[index] = sprite.TextFile{Name: filepath.Base(path), Source: string(source)}
 	}
 	return files, nil
+}
+
+func loadOrCreate(path string) (*sprite.Sheet, error) {
+	if _, err := os.Stat(path); errors.Is(err, fs.ErrNotExist) {
+		return sprite.NewHumanoid(strings.TrimSuffix(filepath.Base(path), filepath.Ext(path)), newSpriteSize, newSpriteSize), nil
+	}
+	return load(path)
 }
 
 func load(path string) (*sprite.Sheet, error) {
