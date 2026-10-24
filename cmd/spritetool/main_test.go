@@ -273,3 +273,23 @@ func TestComposeStacksMoveFilesTheLaterWinning(t *testing.T) {
 		t.Fatal("both moves are written into the sprite")
 	}
 }
+
+func TestBuildCreatesAMissingSpriteFromBodyFiles(t *testing.T) {
+	directory := t.TempDir()
+	path, body := filepath.Join(directory, "wrestler.spr"), filepath.Join(directory, "wrestler.body")
+	source := "ground 60\nhead 10\ntorso 20\nlegs 26\narms 20\nshoulders 14\nhips 7\npart torso 13 12 0.6 p\n"
+	if err := os.WriteFile(body, []byte(source), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	output, err := runTool(t, "build", path, body)
+	if err != nil {
+		t.Fatal(err)
+	}
+	sheet, err := load(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if sheet.Name != "wrestler" || sheet.Parts[sheet.FindPart("torso")].Body == nil || !strings.HasPrefix(output, "wrestler: 1 parts with a body") {
+		t.Fatalf("build writes a new wrestler with a torso body, said %q", output)
+	}
+}
