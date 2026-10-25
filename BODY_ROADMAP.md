@@ -36,4 +36,5 @@ Each step is test-driven: write the failing tests listed, make them pass, keep e
 
 ## 7. First built character
 
+- [x] `spritetool cutout` turns a plate of rendered views into transparent, palette-snapped pictures at sprite size, to capture onto parts.
 - [ ] One character built from a body file and a drawn head, with common moves composed on it, shown on a perspective floor at near and far depth.

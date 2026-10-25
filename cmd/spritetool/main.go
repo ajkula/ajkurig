@@ -18,6 +18,8 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/ajkula/ajkurig/colorx"
+	"github.com/ajkula/ajkurig/cutout"
 	"github.com/ajkula/ajkurig/sprite"
 )
 
@@ -71,6 +73,7 @@ var commands = map[string]command{
 	"depth":      {"depth hero.spr part depth [part depth...]", runDepth},
 	"parts":      {"parts [-scale 4] hero.spr out.png", runParts},
 	"bones":      {"bones hero.spr [move frame]", runBones},
+	"cutout":     {"cutout [-columns 2] [-rows 2] [-height 96] [-blends 8] plate.png outdir", runCutout},
 	"get":        {usagesStarting("get "), runGet},
 	"set":        {usagesStarting("set "), runSet},
 }
@@ -319,6 +322,36 @@ func runBones(arguments []string, out io.Writer) error {
 		end := ends[index]
 		direction := math.Atan2(end[1][1]-end[0][1], end[1][0]-end[0][0]) * 180 / math.Pi
 		fmt.Fprintf(out, "%-16s pivot %6.1f %6.1f  tip %6.1f %6.1f  direction %7.1f  facing %7.1f  depth %6.1f\n", part.Name, end[0][0], end[0][1], end[1][0], end[1][1], direction, facings[index], depths[index])
+	}
+	return nil
+}
+
+func runCutout(arguments []string, out io.Writer) error {
+	flags := flag.NewFlagSet("cutout", flag.ContinueOnError)
+	columns := flags.Int("columns", 2, "views across the plate")
+	rows := flags.Int("rows", 2, "views down the plate")
+	height := flags.Int("height", 96, "sprite pixels of the tallest view")
+	blends := flags.Int("blends", 8, "steps between two palette colors")
+	if err := flags.Parse(arguments); err != nil || flags.NArg() != 2 || *columns < 1 || *rows < 1 {
+		return errors.New("needs a plate picture and an output folder")
+	}
+	picture, err := open(flags.Arg(0))
+	if err != nil {
+		return err
+	}
+	views := []*image.NRGBA{}
+	for _, area := range cutout.Cells(picture.Bounds(), *columns, *rows) {
+		views = append(views, cutout.Isolate(picture, area))
+	}
+	matcher := colorx.NewMatcher(colorx.Mixes(colorx.Palette, max(1, *blends)))
+	name := strings.TrimSuffix(filepath.Base(flags.Arg(0)), filepath.Ext(flags.Arg(0)))
+	for index, view := range cutout.Shrink(views, max(1, *height)) {
+		cutout.Snap(view, matcher)
+		path := filepath.Join(flags.Arg(1), fmt.Sprintf("%s-%d.png", name, index+1))
+		if err := save(path, view); err != nil {
+			return err
+		}
+		fmt.Fprintf(out, "%s %dx%d\n", path, view.Bounds().Dx(), view.Bounds().Dy())
 	}
 	return nil
 }
@@ -900,6 +933,16 @@ func store(path string, sheet *sprite.Sheet) error {
 		return err
 	}
 	return os.WriteFile(path, []byte(source), 0o644)
+}
+
+func open(path string) (image.Image, error) {
+	file, err := os.Open(path)
+	if err != nil {
+		return nil, err
+	}
+	defer file.Close()
+	picture, _, err := image.Decode(file)
+	return picture, err
 }
 
 func save(path string, picture image.Image) error {
