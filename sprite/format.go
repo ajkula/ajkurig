@@ -47,6 +47,7 @@ var directives = map[string]func(p *parser, fields []string) error{
 	"limit":    (*parser).readLimit,
 	"depth":    (*parser).readDepth,
 	"solid":    (*parser).readSolid,
+	"skinned":  (*parser).readSkinned,
 	"body":     (*parser).readBody,
 	"band":     (*parser).readBand,
 	"lump":     (*parser).readLump,
@@ -250,6 +251,14 @@ func (p *parser) readSolid(fields []string) error {
 		return errors.New("solid belongs to a part and takes nothing after it")
 	}
 	p.part.IsSolid = true
+	return nil
+}
+
+func (p *parser) readSkinned(fields []string) error {
+	if p.part == nil || p.part.Body == nil || len(fields) > 0 {
+		return errors.New("skinned belongs to a part with a body and takes nothing after it")
+	}
+	p.part.IsSkinned = true
 	return nil
 }
 
@@ -478,7 +487,7 @@ func (p *parser) finish() error {
 		p.sheet.Animations = []*Animation{NewAnimation("idle")}
 	}
 	for _, part := range p.sheet.Parts {
-		if part.Body != nil {
+		if part.Body != nil && !part.IsSkinned {
 			part.drawSilhouette()
 		}
 	}
@@ -556,8 +565,11 @@ func writePart(builder *strings.Builder, sheet *Sheet, part *Part) {
 		fmt.Fprintf(builder, "body %s %s %s %c\n", formatOffset(part.Body.StartWidth), formatOffset(part.Body.EndWidth), formatOffset(part.Body.DepthRatio), sheet.Palette[part.Body.Color].Symbol)
 		writeBands(builder, sheet, part.Body.Bands)
 		writeLumps(builder, part.Body.Lumps)
+	}
+	if part.Body != nil && !part.IsSkinned {
 		return
 	}
+	builder.WriteString([2]string{"", "skinned\n"}[boolToInt(part.IsSkinned)])
 	writePixels(builder, sheet, part.Layer)
 	for _, view := range part.Views {
 		fmt.Fprintf(builder, "view %s%s%s\n", strconv.FormatFloat(view.Turn, 'f', -1, 64), [2]string{"", " " + strconv.FormatFloat(view.Tilt, 'f', -1, 64)}[boolToInt(view.Tilt != 0)], [2]string{"", " " + view.Name}[boolToInt(view.Name != "")])

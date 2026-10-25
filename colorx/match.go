@@ -28,6 +28,18 @@ func Mixes(palette []RGB, steps int) []RGB {
 	return mixes
 }
 
+func TripleMixes(palette []RGB, steps int) []RGB {
+	mixes := Mixes(palette, steps)
+	for first := range palette {
+		for second := first + 1; second < len(palette); second++ {
+			for third := second + 1; third < len(palette); third++ {
+				mixes = appendTripleBlends(mixes, [3]RGB{palette[first], palette[second], palette[third]}, steps)
+			}
+		}
+	}
+	return mixes
+}
+
 func NewMatcher(colors []RGB) *Matcher {
 	labs := make([]RGB, len(colors))
 	for index, color := range colors {
@@ -51,6 +63,21 @@ func (m *Matcher) Nearest(rgb RGB) RGB {
 func appendBlends(mixes []RGB, from, to RGB, steps int) []RGB {
 	for step := 1; step < steps; step++ {
 		mixes = append(mixes, Mix(from, to, float32(step)/float32(steps)))
+	}
+	return mixes
+}
+
+func appendTripleBlends(mixes []RGB, corners [3]RGB, steps int) []RGB {
+	for first := 1; first < steps; first++ {
+		for second := 1; first+second < steps; second++ {
+			firstWeight, secondWeight := float32(first)/float32(steps), float32(second)/float32(steps)
+			thirdWeight := 1 - firstWeight - secondWeight
+			mixes = append(mixes, RGB{
+				corners[0][0]*firstWeight + corners[1][0]*secondWeight + corners[2][0]*thirdWeight,
+				corners[0][1]*firstWeight + corners[1][1]*secondWeight + corners[2][1]*thirdWeight,
+				corners[0][2]*firstWeight + corners[1][2]*secondWeight + corners[2][2]*thirdWeight,
+			})
+		}
 	}
 	return mixes
 }

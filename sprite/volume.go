@@ -18,7 +18,7 @@ type Volume struct {
 	cells      []uint8
 	faces      []voxelFace
 	normals    [][3]float64
-	solidCells []int
+	shell      [][3]float64
 }
 
 type voxelFace struct {

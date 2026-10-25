@@ -20,6 +20,7 @@ import (
 
 	"github.com/ajkula/ajkurig/colorx"
 	"github.com/ajkula/ajkurig/cutout"
+	"github.com/ajkula/ajkurig/mathx"
 	"github.com/ajkula/ajkurig/sprite"
 )
 
@@ -99,6 +100,7 @@ var setters = map[string]access{
 	"view":    setView,
 	"paint":   setPaint,
 	"picture": setPicture,
+	"skin":    setSkin,
 }
 
 var accessUsages = []string{
@@ -115,9 +117,14 @@ var accessUsages = []string{
 	"set view hero.spr part turn tilt",
 	"set paint hero.spr part turn tilt x y symbol [x y symbol...]",
 	"set picture hero.spr part turn tilt picture.png anchor-x anchor-y [left top right bottom]",
+	"set skin hero.spr turn picture.png [mirror] [offset-x offset-y]",
 }
 
 var solidByWord = map[string]bool{"no": false, "yes": true}
+
+var pictureMirrors = [2]func(picture image.Image) image.Image{keepPicture, mirrorPicture}
+
+var paletteMixers =[2]func(palette []colorx.RGB, steps int) []colorx.RGB{colorx.Mixes, colorx.TripleMixes}
 
 var poseAxes = []sprite.Axis{sprite.AxisZ, sprite.AxisX, sprite.AxisY}
 
@@ -337,7 +344,9 @@ func runCutout(arguments []string, out io.Writer) error {
 	columns := flags.Int("columns", 2, "views across the plate")
 	rows := flags.Int("rows", 2, "views down the plate")
 	height := flags.Int("height", 96, "sprite pixels of the tallest view")
-	blends := flags.Int("blends", 8, "steps between two palette colors")
+	blends := flags.Int("blends", 8, "steps between palette colors")
+	isTriple := flags.Bool("triples", true, "blend three palette colors, not only two")
+	colors := flags.Int("colors", 56, "colors kept across the whole plate")
 	if err := flags.Parse(arguments); err != nil || flags.NArg() != 2 || *columns < 1 || *rows < 1 {
 		return errors.New("needs a plate picture and an output folder")
 	}
@@ -349,10 +358,15 @@ func runCutout(arguments []string, out io.Writer) error {
 	for _, area := range cutout.Cells(picture.Bounds(), *columns, *rows) {
 		views = append(views, cutout.Isolate(picture, area))
 	}
-	matcher := colorx.NewMatcher(colorx.Mixes(colorx.Palette, max(1, *blends)))
+	matcher := colorx.NewMatcher(paletteMixers[mathx.BoolToIndex(*isTriple)](colorx.Palette, max(1, *blends)))
 	name := strings.TrimSuffix(filepath.Base(flags.Arg(0)), filepath.Ext(flags.Arg(0)))
-	for index, view := range cutout.Shrink(views, max(1, *height)) {
+	shrunk := cutout.Shrink(views, max(1, *height))
+	for _, view := range shrunk {
 		cutout.Snap(view, matcher)
+	}
+	kept := cutout.Budget(shrunk, max(1, *colors))
+	fmt.Fprintf(out, "%d colors\n", kept)
+	for index, view := range shrunk {
 		path := filepath.Join(flags.Arg(1), fmt.Sprintf("%s-%d.png", name, index+1))
 		if err := save(path, view); err != nil {
 			return err
@@ -684,6 +698,34 @@ func setPicture(sheet *sprite.Sheet, arguments []string, out io.Writer) error {
 	return nil
 }
 
+func setSkin(sheet *sprite.Sheet, arguments []string, out io.Writer) error {
+	isMirrored := len(arguments) > 2 && arguments[2] == "mirror"
+	arguments = slices.Delete(slices.Clone(arguments), 2, 2+mathx.BoolToIndex(isMirrored))
+	if len(arguments) != 2 && len(arguments) != 4 {
+		return errors.New("needs a turn and a picture, then optionally mirror and the offset that places the picture on the sprite")
+	}
+	turn, err := readNumbers(arguments[:1])
+	if err != nil {
+		return err
+	}
+	opened, err := open(arguments[1])
+	if err != nil {
+		return err
+	}
+	picture := pictureMirrors[mathx.BoolToIndex(isMirrored)](opened)
+	offset := sheet.SkinOffset(turn[0], picture)
+	if len(arguments) == 4 {
+		numbers, err := readWholeNumbers(arguments[2:])
+		if err != nil {
+			return err
+		}
+		offset = image.Pt(numbers[0], numbers[1])
+	}
+	painted := sheet.Skin(turn[0], picture, offset)
+	fmt.Fprintf(out, "%d pixels skinned at turn %s, offset %d %d\n", painted, arguments[0], offset.X, offset.Y)
+	return nil
+}
+
 func getPalette(sheet *sprite.Sheet, arguments []string, out io.Writer) error {
 	if len(arguments) != 0 {
 		return errors.New("needs nothing after the sprite")
@@ -979,6 +1021,21 @@ func open(path string) (image.Image, error) {
 	defer file.Close()
 	picture, _, err := image.Decode(file)
 	return picture, err
+}
+
+func keepPicture(picture image.Image) image.Image {
+	return picture
+}
+
+func mirrorPicture(picture image.Image) image.Image {
+	bounds := picture.Bounds()
+	mirrored := image.NewNRGBA(image.Rect(0, 0, bounds.Dx(), bounds.Dy()))
+	for y := range bounds.Dy() {
+		for x := range bounds.Dx() {
+			mirrored.Set(bounds.Dx()-1-x, y, picture.At(bounds.Min.X+x, bounds.Min.Y+y))
+		}
+	}
+	return mirrored
 }
 
 func save(path string, picture image.Image) error {

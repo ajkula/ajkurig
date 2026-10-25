@@ -110,11 +110,10 @@ func (s *Sheet) capturePixel(capture Capture, transforms []Affine, ends [][2][2]
 }
 
 func (s *Sheet) paintPicturePixel(surface *Layer, picture image.Image, x, y int, offset image.Point) int {
-	red, green, blue, alpha := picture.At(x, y).RGBA()
-	if alpha < 0x8000 {
+	color, isSolid := pictureColor(picture, x, y)
+	if !isSolid {
 		return 0
 	}
-	color := [3]uint8{uint8(red * 0xff / alpha), uint8(green * 0xff / alpha), uint8(blue * 0xff / alpha)}
 	return mathx.BoolToIndex(surface.Set(x+offset.X, y+offset.Y, s.SwatchFor(color)))
 }
 

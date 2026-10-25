@@ -1,9 +1,12 @@
 package cutout
 
 import (
+	"cmp"
 	"image"
 	"image/draw"
+	"maps"
 	"math"
+	"slices"
 
 	"github.com/ajkula/ajkurig/colorx"
 	"github.com/ajkula/ajkurig/mathx"
@@ -73,6 +76,27 @@ func Snap(view *image.NRGBA, matcher *colorx.Matcher) {
 		}
 		copy(view.Pix[offset:offset+3], color[:])
 	}
+}
+
+func Budget(views []*image.NRGBA, colors int) int {
+	usage := map[[3]uint8]int{}
+	for _, view := range views {
+		for offset := 0; offset < len(view.Pix); offset += 4 {
+			usage[[3]uint8(view.Pix[offset:offset+3])] += mathx.BoolToIndex(view.Pix[offset+3] != 0)
+		}
+	}
+	ranked := slices.SortedFunc(maps.Keys(usage), func(first, second [3]uint8) int {
+		return cmp.Or(usage[second]-usage[first], slices.Compare(first[:], second[:]))
+	})
+	kept := make([]colorx.RGB, 0, colors)
+	for _, color := range ranked[:min(colors, len(ranked))] {
+		kept = append(kept, colorOf(color))
+	}
+	matcher := colorx.NewMatcher(kept)
+	for _, view := range views {
+		Snap(view, matcher)
+	}
+	return len(kept)
 }
 
 // ===== Internal =====

@@ -13,7 +13,47 @@ func (l *Layer) FillHoles(sides int) int {
 	return filled
 }
 
+func (l *Layer) GrowInto(spots []Point) int {
+	filled := 0
+	for pending := spots; len(pending) > 0; {
+		chosen, waiting := l.growStep(pending)
+		if len(chosen) == 0 {
+			return filled
+		}
+		for spot, value := range chosen {
+			l.Set(spot.X, spot.Y, value)
+		}
+		filled, pending = filled+len(chosen), waiting
+	}
+	return filled
+}
+
 // ===== Internal =====
+
+func (l *Layer) growStep(spots []Point) (map[Point]uint8, []Point) {
+	chosen, waiting := map[Point]uint8{}, []Point{}
+	for _, spot := range spots {
+		if l.At(spot.X, spot.Y) != Transparent {
+			continue
+		}
+		value := l.paintedNeighbour(spot)
+		if value == Transparent {
+			waiting = append(waiting, spot)
+			continue
+		}
+		chosen[spot] = value
+	}
+	return chosen, waiting
+}
+
+func (l *Layer) paintedNeighbour(spot Point) uint8 {
+	for _, step := range fourSteps {
+		if value := l.At(spot.X+step.X, spot.Y+step.Y); value != Transparent {
+			return value
+		}
+	}
+	return Transparent
+}
 
 func (l *Layer) enclosedHoles(sides int) map[int]bool {
 	holes := map[int]bool{}

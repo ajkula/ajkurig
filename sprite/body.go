@@ -57,7 +57,7 @@ func (p *Part) SetBody(body Body) {
 // ===== Internal =====
 
 func (p *Part) isVolume() bool {
-	return p.IsSolid || p.Body != nil
+	return p.IsSolid || p.Body != nil && !p.IsSkinned
 }
 
 func (p *Part) bodyVolume() *Volume {

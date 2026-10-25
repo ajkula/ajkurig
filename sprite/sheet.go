@@ -39,6 +39,7 @@ type Part struct {
 	LimitedAxes uint8
 	Depth       int
 	IsSolid     bool
+	IsSkinned   bool
 	Body        *Body
 	*Layer
 	Views      []*View
@@ -166,7 +167,7 @@ func (s *Sheet) AddPart(name string, parent int, pivot Point) int {
 func (s *Sheet) DuplicatePart(index int) int {
 	source := s.Parts[index]
 	copied := s.newPart(source.Name, source.Parent, source.Pivot)
-	copied.Tip, copied.Limits, copied.LimitedAxes, copied.Depth, copied.IsSolid, copied.Body = source.Tip, source.Limits, source.LimitedAxes, source.Depth, source.IsSolid, source.Body
+	copied.Tip, copied.Limits, copied.LimitedAxes, copied.Depth, copied.IsSolid, copied.IsSkinned, copied.Body = source.Tip, source.Limits, source.LimitedAxes, source.Depth, source.IsSolid, source.IsSkinned, source.Body
 	copied.Layer = source.Layer.Clone()
 	for _, view := range source.Views {
 		copied.Views = append(copied.Views, &View{Turn: view.Turn, Tilt: view.Tilt, Name: view.Name, Layer: view.Layer.Clone()})

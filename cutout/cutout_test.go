@@ -104,3 +104,15 @@ func TestSnappedColorsComeFromThePalette(t *testing.T) {
 		}
 	}
 }
+
+func TestABudgetKeepsTheMostUsedColorsOfEveryView(t *testing.T) {
+	first, second := image.NewNRGBA(image.Rect(0, 0, 4, 1)), image.NewNRGBA(image.Rect(0, 0, 4, 1))
+	copy(first.Pix, []uint8{200, 0, 0, 255, 200, 0, 0, 255, 190, 0, 0, 255, 0, 0, 200, 255})
+	copy(second.Pix, []uint8{0, 0, 200, 255, 0, 0, 200, 255, 0, 0, 0, 0, 200, 0, 0, 255})
+	if kept := Budget([]*image.NRGBA{first, second}, 2); kept != 2 {
+		t.Fatalf("two colors are kept, got %d", kept)
+	}
+	if [3]uint8(first.Pix[8:11]) != [3]uint8{200, 0, 0} || second.Pix[11] != 0 {
+		t.Fatalf("a rare color joins the nearest kept one and clear pixels stay clear, got %v %v", first.Pix, second.Pix)
+	}
+}

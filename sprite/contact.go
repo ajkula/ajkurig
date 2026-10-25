@@ -33,7 +33,9 @@ const (
 	settleSwing = 90.0
 )
 
-var settleSwings = func() []float64 {
+var spaceSteps = [6][3]int{{1, 0, 0}, {-1, 0, 0}, {0, 1, 0}, {0, -1, 0}, {0, 0, 1}, {0, 0, -1}}
+
+var settleSwings =func() []float64 {
 	swings := []float64{}
 	for swing := settleStep; swing <= settleSwing; swing += settleStep {
 		swings = append(swings, swing, -swing)
@@ -164,7 +166,7 @@ func (s *Sheet) overlap(placed []*placedVolume, first, second int) int {
 		return 0
 	}
 	zones := s.jointZones(placed, first, second)
-	if len(still.volume.filledCells()) < len(moving.volume.filledCells()) {
+	if len(still.volume.shellPoints()) < len(moving.volume.shellPoints()) {
 		moving, still = still, moving
 	}
 	return moving.countInside(still, zones)
@@ -205,18 +207,25 @@ func (s *Sheet) hasBodyBetween(index, ancestor int) bool {
 }
 
 func (p *placedVolume) countInside(other *placedVolume, zones []jointZone) int {
-	count, volume := 0, p.volume
-	for _, index := range volume.filledCells() {
-		x, y, z := volume.coordinates(index)
-		local := p.turned.apply([3]float64{float64(x - volume.Pivot.X), float64(y - volume.Pivot.Y), float64(z)})
-		world := [3]float64{p.origin[0] + local[0], p.origin[1] + local[1], p.origin[2] + local[2]}
-		count += boolToInt(!isInZones(zones, world) && other.holds(world))
+	relative, offset := other.inverse.then(p.turned), other.toLocal(p.origin)
+	localZones := make([]jointZone, len(zones))
+	for index, zone := range zones {
+		localZones[index] = jointZone{other.toLocal(zone.center), zone.radius}
+	}
+	count := 0
+	for _, point := range p.volume.shellPoints() {
+		turned := relative.apply(point)
+		local := [3]float64{turned[0] + offset[0], turned[1] + offset[1], turned[2] + offset[2]}
+		count += boolToInt(other.holdsLocal(local) && !isInZones(localZones, local))
 	}
 	return count
 }
 
-func (p *placedVolume) holds(world [3]float64) bool {
-	local := p.inverse.apply([3]float64{world[0] - p.origin[0], world[1] - p.origin[1], world[2] - p.origin[2]})
+func (p *placedVolume) toLocal(world [3]float64) [3]float64 {
+	return p.inverse.apply([3]float64{world[0] - p.origin[0], world[1] - p.origin[1], world[2] - p.origin[2]})
+}
+
+func (p *placedVolume) holdsLocal(local [3]float64) bool {
 	x, y, z := int(math.Round(local[0]))+p.volume.Pivot.X, int(math.Round(local[1]))+p.volume.Pivot.Y, int(math.Round(local[2]))
 	return p.volume.At(x, y, z) != Transparent
 }
@@ -230,17 +239,28 @@ func isInZones(zones []jointZone, point [3]float64) bool {
 	return false
 }
 
-func (v *Volume) filledCells() []int {
-	if v.solidCells != nil {
-		return v.solidCells
+func (v *Volume) shellPoints() [][3]float64 {
+	if v.shell != nil {
+		return v.shell
 	}
-	v.solidCells = make([]int, 0, len(v.cells)/4)
+	v.shell = make([][3]float64, 0, len(v.cells)/8)
 	for index, value := range v.cells {
-		if value != Transparent {
-			v.solidCells = append(v.solidCells, index)
+		x, y, z := v.coordinates(index)
+		if value == Transparent || !v.touchesEmpty(x, y, z) {
+			continue
+		}
+		v.shell = append(v.shell, [3]float64{float64(x - v.Pivot.X), float64(y - v.Pivot.Y), float64(z)})
+	}
+	return v.shell
+}
+
+func (v *Volume) touchesEmpty(x, y, z int) bool {
+	for _, step := range spaceSteps {
+		if v.At(x+step[0], y+step[1], z+step[2]) == Transparent {
+			return true
 		}
 	}
-	return v.solidCells
+	return false
 }
 
 func (v *Volume) reach() float64 {
