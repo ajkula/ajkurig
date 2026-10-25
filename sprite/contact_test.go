@@ -1,6 +1,7 @@
 package sprite
 
 import (
+	"math"
 	"slices"
 	"testing"
 )
@@ -73,5 +74,22 @@ func TestDrawnSpritesAreNeverSettled(t *testing.T) {
 	sheet.Settle(pose, func(int) bool { return false })
 	if pose[sheet.FindPart("arm_front_fore")].Angle != 90 || len(sheet.Contacts(pose)) > 0 {
 		t.Fatal("parts without a body have no volume to collide")
+	}
+}
+
+func TestGroundLaysALyingBodyOnTheFloor(t *testing.T) {
+	sheet := builtFigure(t)
+	lying := "\n  hips 0\n  torso 180\n  head 180\n  arm_front_upper 175\n  arm_front_fore 180\n  arm_back_upper 185\n  arm_back_fore 180\n  leg_front_thigh 0\n  leg_front_shin 0\n  leg_back_thigh 0\n  leg_back_shin 0\n"
+	scripts, err := ParseMoves("move floating once\nkey 4" + lying + "move down once\nkey 4 ground" + lying)
+	if err != nil {
+		t.Fatal(err)
+	}
+	floor := sheet.lowestPoint(sheet.Grow(nil))
+	floating, down := sheet.Compose(scripts[0]).Frames[0].Pose, sheet.Compose(scripts[1]).Frames[0].Pose
+	if sheet.lowestPoint(floating) > floor-5 {
+		t.Fatalf("the test needs a lying body that floats without ground, lowest %v floor %v", sheet.lowestPoint(floating), floor)
+	}
+	if math.Abs(sheet.lowestPoint(down)-floor) > 1 {
+		t.Fatalf("ground lays the lowest point of the body on the floor, got %v for floor %v", sheet.lowestPoint(down), floor)
 	}
 }

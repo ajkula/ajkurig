@@ -30,6 +30,7 @@ type Step struct {
 	PlantX      float64
 	IsAtX       bool
 	Lift        Point
+	IsGrounded  bool
 	Lead        float64
 	IsLeant     bool
 	Hold        Hold
@@ -207,6 +208,7 @@ func (s *Sheet) placeStep(step Step, lean float64, steady []bool) Pose {
 	s.Settle(pose, func(index int) bool { return steady[index] })
 	pose[root].Shift = step.Lift
 	s.plant(pose, step, planted)
+	s.ground(pose, step, root)
 	return pose
 }
 
@@ -280,6 +282,30 @@ func (s *Sheet) plant(pose Pose, step Step, planted int) {
 	posedX, posedY := s.footAt(pose, planted)
 	pose[root].Shift.X += int(math.Round(restX - posedX))
 	pose[root].Shift.Y += int(math.Round(restY - posedY))
+}
+
+func (s *Sheet) ground(pose Pose, step Step, root int) {
+	if !step.IsGrounded {
+		return
+	}
+	pose[root].Shift.Y += int(math.Round(s.lowestPoint(s.Grow(nil)) - s.lowestPoint(pose)))
+}
+
+func (s *Sheet) lowestPoint(pose Pose) float64 {
+	ends := s.BoneEnds(s.Transforms(pose))
+	lowest := math.Inf(-1)
+	for index, part := range s.Parts {
+		startReach, endReach := part.halfWidths()
+		lowest = max(lowest, ends[index][0][1]+startReach, ends[index][1][1]+endReach)
+	}
+	return lowest
+}
+
+func (p *Part) halfWidths() (float64, float64) {
+	if p.Body == nil {
+		return 0, 0
+	}
+	return p.Body.StartWidth / 2, p.Body.EndWidth / 2
 }
 
 func (s *Sheet) footAt(pose Pose, index int) (float64, float64) {

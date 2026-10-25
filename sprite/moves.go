@@ -49,6 +49,7 @@ var keyOptions = map[string]func(step *Step, fields []string) (int, error){
 	"brace":   readBrace,
 	"at":      readPlantX,
 	"lift":    readLift,
+	"ground":  readGround,
 	"lead":    readLead,
 	"knee":    readKnee,
 	"hold":    readGripOf("hold"),
@@ -131,7 +132,7 @@ func (p *movesParser) readKey(fields []string) error {
 	for rest := fields[1:]; len(rest) > 0; {
 		read, isKnown := keyOptions[rest[0]]
 		if !isKnown {
-			return fmt.Errorf("unknown key option %q (plant, brace, knee, at, lift, lead, hold, release)", rest[0])
+			return fmt.Errorf("unknown key option %q (plant, brace, knee, at, lift, ground, lead, hold, release)", rest[0])
 		}
 		used, err := read(&step, rest[1:])
 		if err != nil {
@@ -285,6 +286,11 @@ func readLift(step *Step, fields []string) (int, error) {
 	}
 	step.Lift = Point{values[0], values[1]}
 	return 2, nil
+}
+
+func readGround(step *Step, fields []string) (int, error) {
+	step.IsGrounded = true
+	return 0, nil
 }
 
 func readLead(step *Step, fields []string) (int, error) {
