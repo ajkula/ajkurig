@@ -4,6 +4,8 @@ package sprite
 
 var fourSteps = [4]Point{{1, 0}, {-1, 0}, {0, 1}, {0, -1}}
 
+var eightSteps = [8]Point{{1, 0}, {-1, 0}, {0, 1}, {0, -1}, {1, 1}, {-1, -1}, {1, -1}, {-1, 1}}
+
 // ===== Public API =====
 
 func (l *Layer) FillHoles(sides int) int {
@@ -47,12 +49,18 @@ func (l *Layer) growStep(spots []Point) (map[Point]uint8, []Point) {
 }
 
 func (l *Layer) paintedNeighbour(spot Point) uint8 {
-	for _, step := range fourSteps {
-		if value := l.At(spot.X+step.X, spot.Y+step.Y); value != Transparent {
-			return value
-		}
+	var counts [256]uint8
+	best := Transparent
+	for _, step := range eightSteps {
+		value := l.At(spot.X+step.X, spot.Y+step.Y)
+		counts[value] += boolToInt8(value != Transparent)
+		best = [2]uint8{best, value}[boolToInt(counts[value] > counts[best])]
 	}
-	return Transparent
+	return best
+}
+
+func boolToInt8(condition bool) uint8 {
+	return uint8(boolToInt(condition))
 }
 
 func (l *Layer) enclosedHoles(sides int) map[int]bool {

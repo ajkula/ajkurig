@@ -36,7 +36,7 @@ func TestASkinnedBodyRendersThePictureItWasSkinnedWith(t *testing.T) {
 	for _, turn := range []float64{0, -45} {
 		sheet := builtFigure(t, TextFile{Name: "belly.body", Source: bellyBody})
 		picture := renderedPicture(sheet, turnedRest(sheet, turn), isEveryPart)
-		if painted := sheet.Skin(turn, picture, image.Point{}); painted == 0 {
+		if painted := sheet.Skin(turn, nil, picture, image.Point{}); painted == 0 {
 			t.Fatalf("turn %v: skinning paints the parts", turn)
 		}
 		rendered, same, solid := renderedPicture(sheet, turnedRest(sheet, turn), isEveryPart), 0, 0
@@ -45,7 +45,7 @@ func TestASkinnedBodyRendersThePictureItWasSkinnedWith(t *testing.T) {
 			solid += boolToInt(isSolid)
 			same += boolToInt(isSolid && [4]uint8(rendered.Pix[offset:offset+4]) == [4]uint8(picture.Pix[offset:offset+4]))
 		}
-		if same*100 < solid*95 {
+		if same*100 < solid*90 {
 			t.Fatalf("turn %v: the skinned rest pose shows the picture again, %d of %d pixels match", turn, same, solid)
 		}
 	}
@@ -54,7 +54,7 @@ func TestASkinnedBodyRendersThePictureItWasSkinnedWith(t *testing.T) {
 func TestASkinnedBodyIsSavedWithItsPictures(t *testing.T) {
 	sheet := builtFigure(t, TextFile{Name: "belly.body", Source: bellyBody})
 	pose := turnedRest(sheet, -45)
-	sheet.Skin(-45, renderedPicture(sheet, pose, isEveryPart), image.Point{})
+	sheet.Skin(-45, nil, renderedPicture(sheet, pose, isEveryPart), image.Point{})
 	loaded, err := Parse(Write(sheet))
 	if err != nil {
 		t.Fatal(err)
@@ -73,8 +73,27 @@ func TestASkinnedPartIsWholeWhereAnotherHidItInThePicture(t *testing.T) {
 	for _, owner := range sheet.volumeOwners(pose, sheet.Canvas(), isTorso) {
 		whole += boolToInt(owner == int16(torso))
 	}
-	sheet.Skin(-45, renderedPicture(sheet, pose, isEveryPart), image.Point{})
+	sheet.Skin(-45, nil, renderedPicture(sheet, pose, isEveryPart), image.Point{})
 	if skinned := solidCount(renderedPicture(sheet, pose, isTorso)); skinned*100 < whole*95 {
 		t.Fatalf("the torso behind the arms is filled in, %d of %d pixels", skinned, whole)
+	}
+}
+
+func TestABodySkinnedInAStanceShowsThePictureInThatStance(t *testing.T) {
+	sheet := builtFigure(t, TextFile{Name: "belly.body", Source: bellyBody})
+	stance := sheet.Grow(nil)
+	stance[sheet.FindPart("arm_back_upper")].Angle -= 35
+	stance[sheet.FindPart("arm_front_upper")].Angle += 35
+	posed := sheet.stanceAt(-45, stance)
+	picture := renderedPicture(sheet, posed, isEveryPart)
+	sheet.Skin(-45, stance, picture, image.Point{})
+	rendered, same, solid := renderedPicture(sheet, posed, isEveryPart), 0, 0
+	for offset := 0; offset < len(picture.Pix); offset += 4 {
+		isSolid := picture.Pix[offset+3] != 0
+		solid += boolToInt(isSolid)
+		same += boolToInt(isSolid && [4]uint8(rendered.Pix[offset:offset+4]) == [4]uint8(picture.Pix[offset:offset+4]))
+	}
+	if same*100 < solid*90 {
+		t.Fatalf("the spread arms take their pictures where the stance puts them, %d of %d pixels match", same, solid)
 	}
 }

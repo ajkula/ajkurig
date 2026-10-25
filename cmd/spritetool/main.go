@@ -117,7 +117,7 @@ var accessUsages = []string{
 	"set view hero.spr part turn tilt",
 	"set paint hero.spr part turn tilt x y symbol [x y symbol...]",
 	"set picture hero.spr part turn tilt picture.png anchor-x anchor-y [left top right bottom]",
-	"set skin hero.spr turn picture.png [mirror] [offset-x offset-y]",
+	"set skin hero.spr turn picture.png [mirror] [pose move] [offset-x offset-y]",
 }
 
 var solidByWord = map[string]bool{"no": false, "yes": true}
@@ -699,10 +699,13 @@ func setPicture(sheet *sprite.Sheet, arguments []string, out io.Writer) error {
 }
 
 func setSkin(sheet *sprite.Sheet, arguments []string, out io.Writer) error {
-	isMirrored := len(arguments) > 2 && arguments[2] == "mirror"
-	arguments = slices.Delete(slices.Clone(arguments), 2, 2+mathx.BoolToIndex(isMirrored))
+	arguments, isMirrored, stanceName := readSkinOptions(arguments)
 	if len(arguments) != 2 && len(arguments) != 4 {
-		return errors.New("needs a turn and a picture, then optionally mirror and the offset that places the picture on the sprite")
+		return errors.New("needs a turn and a picture, then optionally mirror, pose and a move, and the offset that places the picture on the sprite")
+	}
+	stance, err := stancePose(sheet, stanceName)
+	if err != nil {
+		return err
 	}
 	turn, err := readNumbers(arguments[:1])
 	if err != nil {
@@ -713,7 +716,7 @@ func setSkin(sheet *sprite.Sheet, arguments []string, out io.Writer) error {
 		return err
 	}
 	picture := pictureMirrors[mathx.BoolToIndex(isMirrored)](opened)
-	offset := sheet.SkinOffset(turn[0], picture)
+	offset := sheet.SkinOffset(turn[0], stance, picture)
 	if len(arguments) == 4 {
 		numbers, err := readWholeNumbers(arguments[2:])
 		if err != nil {
@@ -721,9 +724,33 @@ func setSkin(sheet *sprite.Sheet, arguments []string, out io.Writer) error {
 		}
 		offset = image.Pt(numbers[0], numbers[1])
 	}
-	painted := sheet.Skin(turn[0], picture, offset)
+	painted := sheet.Skin(turn[0], stance, picture, offset)
 	fmt.Fprintf(out, "%d pixels skinned at turn %s, offset %d %d\n", painted, arguments[0], offset.X, offset.Y)
 	return nil
+}
+
+func readSkinOptions(arguments []string) ([]string, bool, string) {
+	kept, isMirrored, stanceName := []string{}, false, ""
+	for index := 0; index < len(arguments); index++ {
+		isStance := arguments[index] == "pose" && index+1 < len(arguments)
+		stanceName = [2]string{stanceName, arguments[min(index+1, len(arguments)-1)]}[mathx.BoolToIndex(isStance)]
+		isMirrored = isMirrored || arguments[index] == "mirror"
+		isOption := isStance || arguments[index] == "mirror"
+		index += mathx.BoolToIndex(isStance)
+		kept = append(kept, arguments[index:index+1-mathx.BoolToIndex(isOption)]...)
+	}
+	return kept, isMirrored, stanceName
+}
+
+func stancePose(sheet *sprite.Sheet, moveName string) (sprite.Pose, error) {
+	if moveName == "" {
+		return nil, nil
+	}
+	animation := sheet.FindAnimation(moveName)
+	if animation == nil {
+		return nil, fmt.Errorf("no move named %q to skin in", moveName)
+	}
+	return sheet.FramePose(animation, 0), nil
 }
 
 func getPalette(sheet *sprite.Sheet, arguments []string, out io.Writer) error {

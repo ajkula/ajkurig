@@ -324,7 +324,7 @@ func (p *Part) viewFor(facing, tilt float64, drawing string) View {
 		return *chosen
 	}
 	best := View{Layer: p.Layer}
-	bestScore := facingScore(facing, tilt, best)
+	bestScore := [2]float64{facingScore(facing, tilt, best), math.Inf(-1)}[boolToInt(p.IsSkinned && p.Layer.isBlank())]
 	for _, view := range p.Views {
 		score := facingScore(facing, tilt, *view)
 		if view.Name != "" || score <= bestScore {

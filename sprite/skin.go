@@ -3,6 +3,7 @@ package sprite
 import (
 	"image"
 	"math"
+	"slices"
 )
 
 // ===== Types =====
@@ -13,11 +14,14 @@ type skinCanvas struct {
 	solo   []int16
 }
 
+// ===== Constants =====
+
+const skinnedShare = 0.5
+
 // ===== Public API =====
 
-func (s *Sheet) Skin(turn float64, picture image.Image, offset image.Point) int {
-	pose := s.Grow(nil)
-	pose[s.rootIndex()].Turn = turn
+func (s *Sheet) Skin(turn float64, stance Pose, picture image.Image, offset image.Point) int {
+	pose := s.stanceAt(turn, stance)
 	area := s.Canvas()
 	canvas := skinCanvas{area: area, owners: spreadOwners(s.volumeOwners(pose, area, isEveryPart), area)}
 	painted := 0
@@ -26,15 +30,18 @@ func (s *Sheet) Skin(turn float64, picture image.Image, offset image.Point) int 
 			continue
 		}
 		canvas.solo = s.volumeOwners(pose, area, func(shown int) bool { return shown == index })
-		painted += s.skinPart(index, part.skinSurface(turn), picture, offset, canvas)
 		part.IsSkinned = true
+		if canvas.visibleShare(int16(index)) < skinnedShare {
+			part.dropSkin(turn)
+			continue
+		}
+		painted += s.skinPart(index, part.skinSurface(turn), picture, offset, canvas)
 	}
 	return painted
 }
 
-func (s *Sheet) SkinOffset(turn float64, picture image.Image) image.Point {
-	pose := s.Grow(nil)
-	pose[s.rootIndex()].Turn = turn
+func (s *Sheet) SkinOffset(turn float64, stance Pose, picture image.Image) image.Point {
+	pose := s.stanceAt(turn, stance)
 	area := s.Canvas()
 	bodyX, bodyBottom := ownersFootprint(s.volumeOwners(pose, area, isEveryPart), area)
 	pictureX, pictureBottom := pictureFootprint(picture)
@@ -42,6 +49,12 @@ func (s *Sheet) SkinOffset(turn float64, picture image.Image) image.Point {
 }
 
 // ===== Internal =====
+
+func (s *Sheet) stanceAt(turn float64, stance Pose) Pose {
+	pose := s.Grow(slices.Clone(stance))
+	pose[s.rootIndex()].Turn += turn
+	return pose
+}
 
 func ownersFootprint(owners []int16, area Area) (float64, int) {
 	sumX, count, bottom := 0.0, 0, 0
@@ -101,6 +114,24 @@ func spreadOwners(owners []int16, area Area) []int16 {
 	return owners
 }
 
+func (c skinCanvas) visibleShare(owner int16) float64 {
+	visible, covered := 0, 0
+	for pixel, solo := range c.solo {
+		isCovered := solo == owner
+		covered += boolToInt(isCovered)
+		visible += boolToInt(isCovered && c.owners[pixel] == owner)
+	}
+	return float64(visible) / float64(max(covered, 1))
+}
+
+func (p *Part) dropSkin(turn float64) {
+	if isWholeTurn(turn) {
+		p.Layer.Clear()
+		return
+	}
+	p.Views = slices.DeleteFunc(p.Views, func(view *View) bool { return view.Name == "" && view.Turn == turn && view.Tilt == 0 })
+}
+
 func (p *Part) skinSurface(turn float64) *Layer {
 	surface := p.Surface(turn, 0)
 	if surface == nil {
@@ -129,6 +160,11 @@ func (s *Sheet) skinPart(index int, surface *Layer, picture image.Image, offset 
 		painted += boolToInt(surface.Set(spot.X, spot.Y, s.SwatchFor(color)))
 	}
 	return painted + surface.GrowInto(hidden)
+}
+
+func (l *Layer) isBlank() bool {
+	l.refresh()
+	return l.bounds.isEmpty()
 }
 
 func pictureColor(picture image.Image, x, y int) ([3]uint8, bool) {
