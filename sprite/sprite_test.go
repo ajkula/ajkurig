@@ -599,6 +599,23 @@ func TestCapturingAPicturePaintsTheChosenParts(t *testing.T) {
 	}
 }
 
+func TestAPicturePaintedOnAViewReplacesItsDrawing(t *testing.T) {
+	sheet := NewHumanoid("painted", 64, 64)
+	head := sheet.Parts[sheet.FindPart("head")]
+	view := head.AddView(90)
+	view.Set(0, 0, 1)
+	picture := image.NewNRGBA(image.Rect(4, 4, 7, 6))
+	picture.SetNRGBA(4, 4, color.NRGBA{200, 40, 40, 255})
+	picture.SetNRGBA(6, 5, color.NRGBA{40, 40, 200, 255})
+	painted := sheet.PaintPicture(view.Layer, picture, image.Pt(10, 20))
+	if painted != 2 || view.At(0, 0) != Transparent {
+		t.Fatalf("the opaque pixels replace the old drawing, %d painted", painted)
+	}
+	if sheet.Palette[view.At(14, 24)].Color != [3]uint8{200, 40, 40} || view.At(16, 25) == Transparent || view.At(15, 24) != Transparent {
+		t.Fatal("each picture pixel lands at its own place moved by the offset")
+	}
+}
+
 func worldDirection(sheet *Sheet, pose Pose, index int) (float64, bool) {
 	rest, hasBone := sheet.RestDirection(index)
 	return rest + sheet.Transforms(pose)[index].Rotation(), hasBone

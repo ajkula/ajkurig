@@ -61,6 +61,17 @@ func (s *Sheet) CapturePicture(capture Capture) int {
 	return painted
 }
 
+func (s *Sheet) PaintPicture(surface *Layer, picture image.Image, offset image.Point) int {
+	surface.Clear()
+	painted, bounds := 0, picture.Bounds()
+	for y := bounds.Min.Y; y < bounds.Max.Y; y++ {
+		for x := bounds.Min.X; x < bounds.Max.X; x++ {
+			painted += s.paintPicturePixel(surface, picture, x, y, offset)
+		}
+	}
+	return painted
+}
+
 func (s *Sheet) SwatchFor(color [3]uint8) uint8 {
 	nearest, distance := s.nearestSwatch(color)
 	symbol := s.freeSymbol()
@@ -96,6 +107,15 @@ func (s *Sheet) capturePixel(capture Capture, transforms []Affine, ends [][2][2]
 		return 0
 	}
 	return mathx.BoolToIndex(part.Set(column, row, s.SwatchFor(picked.color)))
+}
+
+func (s *Sheet) paintPicturePixel(surface *Layer, picture image.Image, x, y int, offset image.Point) int {
+	red, green, blue, alpha := picture.At(x, y).RGBA()
+	if alpha < 0x8000 {
+		return 0
+	}
+	color := [3]uint8{uint8(red * 0xff / alpha), uint8(green * 0xff / alpha), uint8(blue * 0xff / alpha)}
+	return mathx.BoolToIndex(surface.Set(x+offset.X, y+offset.Y, s.SwatchFor(color)))
 }
 
 func (s *Sheet) captureOwner(ends [][2][2]float64, canOwn func(index int) bool, x, y float64) int {

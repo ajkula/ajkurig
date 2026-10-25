@@ -35,6 +35,10 @@ type cell struct {
 	area   sprite.Area
 }
 
+type croppable interface {
+	SubImage(area image.Rectangle) image.Image
+}
+
 type access func(sheet *sprite.Sheet, arguments []string, out io.Writer) error
 
 type rotationChange struct {
@@ -94,6 +98,7 @@ var setters = map[string]access{
 	"solid":   setSolid,
 	"view":    setView,
 	"paint":   setPaint,
+	"picture": setPicture,
 }
 
 var accessUsages = []string{
@@ -109,6 +114,7 @@ var accessUsages = []string{
 	"set solid hero.spr part yes|no",
 	"set view hero.spr part turn tilt",
 	"set paint hero.spr part turn tilt x y symbol [x y symbol...]",
+	"set picture hero.spr part turn tilt picture.png anchor-x anchor-y [left top right bottom]",
 }
 
 var solidByWord = map[string]bool{"no": false, "yes": true}
@@ -645,6 +651,36 @@ func setPaint(sheet *sprite.Sheet, arguments []string, out io.Writer) error {
 		surface.Set(stroke.x, stroke.y, stroke.value)
 	}
 	fmt.Fprintf(out, "%d pixels painted on %s\n", len(strokes), arguments[0])
+	return nil
+}
+
+func setPicture(sheet *sprite.Sheet, arguments []string, out io.Writer) error {
+	if len(arguments) != 6 && len(arguments) != 10 {
+		return errors.New("needs a part, a turn and a tilt, a picture, the picture pixel that lands on the pivot, then optionally the area to keep")
+	}
+	surface, err := faceSurface(sheet, arguments[:3])
+	if err != nil {
+		return err
+	}
+	picture, err := open(arguments[3])
+	if err != nil {
+		return err
+	}
+	numbers, err := readWholeNumbers(append(arguments[4:], "0", "0", "0", "0")[:6])
+	if err != nil {
+		return err
+	}
+	kept := picture.Bounds()
+	if len(arguments) == 10 {
+		kept = image.Rect(numbers[2], numbers[3], numbers[4], numbers[5]).Add(kept.Min).Intersect(kept)
+	}
+	cropped, isCroppable := picture.(croppable)
+	if !isCroppable {
+		return errors.New("the picture format cannot be cropped")
+	}
+	pivot := sheet.Parts[sheet.FindPart(arguments[0])].Pivot
+	painted := sheet.PaintPicture(surface, cropped.SubImage(kept), image.Pt(pivot.X-numbers[0], pivot.Y-numbers[1]).Sub(picture.Bounds().Min))
+	fmt.Fprintf(out, "%d pixels painted on %s\n", painted, arguments[0])
 	return nil
 }
 
