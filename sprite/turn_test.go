@@ -246,6 +246,38 @@ key 5
 	}
 }
 
+func TestALaterShapeReshapesTheSharedMoves(t *testing.T) {
+	common := TextFile{Name: "common.moves", Source: `
+shape guard
+  arm_front_upper 70
+  arm_front_fore -55
+move guard loop
+key 20
+  use guard
+  arm_front_fore -40
+`}
+	own := TextFile{Name: "heavy.moves", Source: `
+shape guard
+  arm_front_upper 95
+  arm_front_fore -25
+`}
+	scripts, err := ParseMoveFiles(common, own)
+	if err != nil {
+		t.Fatal(err)
+	}
+	aims := scripts[0].Steps[0].Aims
+	if aims["arm_front_upper"].Direction != 95 || aims["arm_front_fore"].Direction != -40 {
+		t.Fatalf("the shared guard takes the heavy shape and keeps its own line after use, got %+v", aims)
+	}
+}
+
+func TestAShapeCannotUseItself(t *testing.T) {
+	_, err := ParseMoveFiles(TextFile{Source: "shape a\n  torso 10\nshape b\n  use a\nmove m\nkey 2\n  use b\n"}, TextFile{Source: "shape a\n  use b\n"})
+	if err == nil || !strings.Contains(err.Error(), "uses itself") {
+		t.Fatalf("a loop between shapes is refused, got %v", err)
+	}
+}
+
 func TestMoveFileErrorsNameTheFile(t *testing.T) {
 	_, err := ParseMoveFiles(TextFile{Name: "common.moves", Source: "move a\nkey 2\n"}, TextFile{Name: "hero.moves", Source: "move b\nkey 2\nuse nothing\n"})
 	if err == nil || !strings.HasPrefix(err.Error(), "hero.moves line 3:") {

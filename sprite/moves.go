@@ -18,9 +18,15 @@ type TextFile struct {
 
 type movesParser struct {
 	scripts []MoveScript
-	shapes  map[string]map[string]Aim
-	aims    map[string]Aim
+	shapes  map[string]*aimLines
+	keys    []*aimLines
+	aims    *aimLines
 	step    *Step
+}
+
+type aimLines struct {
+	aims  map[string]Aim
+	lines [][]string
 }
 
 // ===== Constants =====
@@ -56,9 +62,14 @@ func ParseMoves(source string) ([]MoveScript, error) {
 }
 
 func ParseMoveFiles(files ...TextFile) ([]MoveScript, error) {
-	p := &movesParser{shapes: map[string]map[string]Aim{}}
+	p := &movesParser{shapes: map[string]*aimLines{}}
 	for _, file := range files {
 		if err := p.parseFile(file); err != nil {
+			return nil, err
+		}
+	}
+	for _, key := range p.keys {
+		if err := p.resolve(key.aims, key, map[string]bool{}); err != nil {
 			return nil, err
 		}
 	}
@@ -103,7 +114,7 @@ func (p *movesParser) readShape(fields []string) error {
 	if len(fields) != 1 {
 		return errors.New("shape needs a name")
 	}
-	p.aims, p.step = map[string]Aim{}, nil
+	p.aims, p.step = &aimLines{}, nil
 	p.shapes[fields[0]] = p.aims
 	return nil
 }
@@ -131,7 +142,8 @@ func (p *movesParser) readKey(fields []string) error {
 	script := &p.scripts[len(p.scripts)-1]
 	script.Steps = append(script.Steps, step)
 	p.step = &script.Steps[len(script.Steps)-1]
-	p.aims = p.step.Aims
+	p.aims = &aimLines{aims: p.step.Aims}
+	p.keys = append(p.keys, p.aims)
 	return nil
 }
 
@@ -147,11 +159,11 @@ func (p *movesParser) readTween(fields []string) error {
 }
 
 func (p *movesParser) readUse(fields []string) error {
-	shape, isKnown := p.shapes[append(fields, "")[0]]
+	_, isKnown := p.shapes[append(fields, "")[0]]
 	if p.aims == nil || !isKnown {
 		return errors.New("use belongs to a key or a shape and needs a shape defined above")
 	}
-	maps.Copy(p.aims, shape)
+	p.aims.lines = append(p.aims.lines, append([]string{"use"}, fields...))
 	return nil
 }
 
@@ -159,10 +171,38 @@ func (p *movesParser) readAim(fields []string) error {
 	if p.aims == nil {
 		return fmt.Errorf("%q is not a directive and there is no key or shape to aim a part in", fields[0])
 	}
+	if err := applyAim(map[string]Aim{}, fields); err != nil {
+		return err
+	}
+	p.aims.lines = append(p.aims.lines, fields)
+	return nil
+}
+
+func (p *movesParser) resolve(aims map[string]Aim, target *aimLines, resolving map[string]bool) error {
+	for _, line := range target.lines {
+		if line[0] != "use" {
+			applyAim(aims, line)
+			continue
+		}
+		if resolving[line[1]] {
+			return fmt.Errorf("shape %s uses itself", line[1])
+		}
+		resolving[line[1]] = true
+		shape := map[string]Aim{}
+		if err := p.resolve(shape, p.shapes[line[1]], resolving); err != nil {
+			return err
+		}
+		delete(resolving, line[1])
+		maps.Copy(aims, shape)
+	}
+	return nil
+}
+
+func applyAim(aims map[string]Aim, fields []string) error {
 	if len(fields) < 2 || len(fields)%2 != 0 {
 		return errors.New("aim a part like: arm_front_upper 45, or: torso -90 face 30, or: arm_back_fore 50 draw side, with - to keep the rest direction")
 	}
-	aim := p.aims[fields[0]]
+	aim := aims[fields[0]]
 	if fields[1] != "-" {
 		direction, err := strconv.ParseFloat(fields[1], 64)
 		if err != nil {
@@ -179,7 +219,7 @@ func (p *movesParser) readAim(fields []string) error {
 			return err
 		}
 	}
-	p.aims[fields[0]] = aim
+	aims[fields[0]] = aim
 	return nil
 }
 
