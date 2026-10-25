@@ -90,11 +90,12 @@ func paintedCube(t *testing.T) *Volume {
 
 func shootCube(volume *Volume, turn, tilt float64) []uint8 {
 	area := Area{X: 0, Y: 0, Width: 40, Height: 40}
-	pixels, depths := make([]uint8, area.Width*area.Height), make([]float64, area.Width*area.Height)
+	pixels, depths, owners := make([]uint8, area.Width*area.Height), make([]float64, area.Width*area.Height), make([]int16, area.Width*area.Height)
 	for index := range depths {
-		depths[index] = math.Inf(1)
+		depths[index], owners[index] = math.Inf(1), noOwner
 	}
-	volume.render(yawOrientation(turn).then(tiltOrientation(tilt)), [3]float64{20.5, 20.5, 0}, cubeOutline, &[256]Shade{}, area, pixels, depths)
+	volume.render(yawOrientation(turn).then(tiltOrientation(tilt)), [3]float64{20.5, 20.5, 0}, 0, &[256]Shade{}, area, pixels, depths, owners)
+	outlineFigure(pixels, depths, owners, area.Width, area.Height, cubeOutline, nil)
 	return pixels
 }
 

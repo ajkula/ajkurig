@@ -88,6 +88,8 @@ type Sheet struct {
 	depthReaches []float64
 	depthPlanes  [][3]float64
 	depthBuffer  []float64
+	ownerBuffer  []int16
+	outlineMarks []int
 	layers       []*Layer
 	order        []int
 	carriers     []int
@@ -261,16 +263,17 @@ func (s *Sheet) RenderSelectionIn(pose Pose, isShown func(index int) bool, area 
 	clear(target)
 	s.resolveTransforms(pose)
 	s.depthBuffer = slices.Grow(s.depthBuffer[:0], len(target))[:len(target)]
+	s.ownerBuffer = slices.Grow(s.ownerBuffer[:0], len(target))[:len(target)]
 	for index := range s.depthBuffer {
-		s.depthBuffer[index] = math.Inf(1)
+		s.depthBuffer[index], s.ownerBuffer[index] = math.Inf(1), noOwner
 	}
-	outline := s.darkestColor()
 	for _, index := range s.order {
 		if !isShown(index) {
 			continue
 		}
-		partStampers[boolToInt(s.Parts[index].isVolume())](s, index, area, target, outline)
+		partStampers[boolToInt(s.Parts[index].isVolume())](s, index, area, target)
 	}
+	s.outlineMarks = outlineFigure(target, s.depthBuffer, s.ownerBuffer, area.Width, area.Height, s.darkestColor(), s.outlineMarks)
 }
 
 func (s *Sheet) RenderFrame(animation *Animation, index int, target []uint8) {
@@ -413,7 +416,7 @@ func (s *Sheet) placeOf(index int, pose Pose) {
 	s.placePart(index, jointAt(pose, index), s.parentFrame(s.Parts[index].Parent, pose))
 }
 
-func (s *Sheet) stampCard(index int, area Area, target []uint8, _ uint8) {
+func (s *Sheet) stampCard(index int, area Area, target []uint8) {
 	layer, transform := s.layers[index], s.transforms[index]
 	layer.refresh()
 	if layer.bounds.isEmpty() {
@@ -426,12 +429,12 @@ func (s *Sheet) stampCard(index int, area Area, target []uint8, _ uint8) {
 	stamp.sample = samplers[mathx.BoolToIndex(isExact)]
 	for y := region.minY; y < region.maxY; y++ {
 		start, end := (y-area.Y)*area.Width, (y-area.Y+1)*area.Width
-		stamp.row(y, region.minX-area.X, region.maxX-area.X, area.X, target[start:end], s.depthBuffer[start:end])
+		stamp.row(y, region.minX-area.X, region.maxX-area.X, area.X, target[start:end], s.depthBuffer[start:end], s.ownerBuffer[start:end])
 	}
 }
 
-func (s *Sheet) stampSolid(index int, area Area, target []uint8, outline uint8) {
-	s.Parts[index].solidVolume().render(s.orientations[index], s.positions[index], outline, &s.Shades, area, target, s.depthBuffer)
+func (s *Sheet) stampSolid(index int, area Area, target []uint8) {
+	s.Parts[index].solidVolume().render(s.orientations[index], s.positions[index], int16(index), &s.Shades, area, target, s.depthBuffer, s.ownerBuffer)
 }
 
 func (s *Sheet) darkestColor() uint8 {
@@ -443,7 +446,7 @@ func (s *Sheet) darkestColor() uint8 {
 	return uint8(darkest)
 }
 
-func (p stamp) row(y, from, to, left int, pixels []uint8, depths []float64) {
+func (p stamp) row(y, from, to, left int, pixels []uint8, depths []float64, owners []int16) {
 	for column := from; column < to; column++ {
 		sourceX, sourceY := p.inverse.Apply(float64(column+left)+0.5, float64(y)+0.5)
 		value := p.sample(p.layer, sourceX, sourceY)
@@ -451,7 +454,7 @@ func (p stamp) row(y, from, to, left int, pixels []uint8, depths []float64) {
 		if value == Transparent || depth > depths[column]+depthMargin {
 			continue
 		}
-		pixels[column], depths[column] = value, depth
+		pixels[column], depths[column], owners[column] = value, depth, noOwner
 	}
 }
 

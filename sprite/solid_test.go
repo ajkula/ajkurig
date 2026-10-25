@@ -32,11 +32,12 @@ func TestASolidPartRendersItsVolume(t *testing.T) {
 	pose[0].Turn, pose[0].Tilt = 30, 20
 	got := make([]uint8, 40*40)
 	sheet.Render(pose, got)
-	wanted, depths := make([]uint8, 40*40), make([]float64, 40*40)
+	wanted, depths, owners := make([]uint8, 40*40), make([]float64, 40*40), make([]int16, 40*40)
 	for index := range depths {
-		depths[index] = math.Inf(1)
+		depths[index], owners[index] = math.Inf(1), noOwner
 	}
-	sheet.Parts[0].Carve().render(yawOrientation(30).then(tiltOrientation(20)), [3]float64{10.5, 10.5, 0}, sheet.darkestColor(), &sheet.Shades, Area{Width: 40, Height: 40}, wanted, depths)
+	sheet.Parts[0].Carve().render(yawOrientation(30).then(tiltOrientation(20)), [3]float64{10.5, 10.5, 0}, 0, &sheet.Shades, Area{Width: 40, Height: 40}, wanted, depths, owners)
+	outlineFigure(wanted, depths, owners, 40, 40, sheet.darkestColor(), nil)
 	if !slices.Equal(got, wanted) || !slices.Contains(got, 2) {
 		t.Fatal("a solid part should render its turned volume with its outline")
 	}

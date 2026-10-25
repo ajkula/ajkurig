@@ -65,11 +65,13 @@ const (
 	parallelRay   = 1e-12
 	outlineWidth  = 1
 	noCell        = -1
+	noOwner       = -1
+	overlapDepth  = 4.0
 )
 
 var neighbours = [4][2]int{{-1, 0}, {1, 0}, {0, -1}, {0, 1}}
 
-var partStampers = [2]func(s *Sheet, index int, area Area, target []uint8, outline uint8){(*Sheet).stampCard, (*Sheet).stampSolid}
+var partStampers = [2]func(s *Sheet, index int, area Area, target []uint8){(*Sheet).stampCard, (*Sheet).stampSolid}
 
 // ===== Public API =====
 
@@ -125,7 +127,7 @@ func (p *Part) solidVolume() *Volume {
 	return p.volume
 }
 
-func (v *Volume) render(turned orientation, origin [3]float64, outline uint8, shades *[256]Shade, area Area, pixels []uint8, depths []float64) {
+func (v *Volume) render(turned orientation, origin [3]float64, owner int16, shades *[256]Shade, area Area, pixels []uint8, depths []float64, owners []int16) {
 	region := v.screenBox(turned, origin).clipTo(area)
 	width, height := region.maxX-region.minX, region.maxY-region.minY
 	if width <= 0 || height <= 0 {
@@ -137,14 +139,26 @@ func (v *Volume) render(turned orientation, origin [3]float64, outline uint8, sh
 		cell, depth := v.castRay(v.rayThrough(turned, origin, region.minX+index%width, region.minY+index/width), origin[2])
 		hits[index], hitDepths[index] = v.shadedColor(cell, order, turned, shades), depth
 	}
-	for index := range hits {
-		value, depth := outlined(hits, hitDepths, width, height, index, outline)
+	for index, value := range hits {
 		target := (region.minY+index/width-area.Y)*area.Width + region.minX + index%width - area.X
-		if value == Transparent || depth > depths[target]+depthMargin {
+		if value == Transparent || hitDepths[index] > depths[target]+depthMargin {
 			continue
 		}
-		pixels[target], depths[target] = value, depth
+		pixels[target], depths[target], owners[target] = value, hitDepths[index], owner
 	}
+}
+
+func outlineFigure(pixels []uint8, depths []float64, owners []int16, width, height int, outline uint8, marks []int) []int {
+	marks = marks[:0]
+	for index := range pixels {
+		if needsOutline(pixels, depths, owners, width, height, index) {
+			marks = append(marks, index)
+		}
+	}
+	for _, index := range marks {
+		pixels[index] = outline
+	}
+	return marks
 }
 
 func (v *Volume) screenBox(turned orientation, origin [3]float64) box {
@@ -262,23 +276,24 @@ func nearestCrossing(crossings [3]float64) int {
 	return [2]int{axis, 2}[boolToInt(crossings[2] < crossings[axis])]
 }
 
-func outlined(hits []uint8, depths []float64, width, height, index int, outline uint8) (uint8, float64) {
-	if hits[index] != Transparent {
-		return hits[index], depths[index]
-	}
-	x, y := index%width, index/width
-	nearest := math.Inf(1)
+func needsOutline(pixels []uint8, depths []float64, owners []int16, width, height, index int) bool {
+	x, y, owner := index%width, index/width, owners[index]
+	isEmpty := pixels[index] == Transparent
 	for _, offset := range neighbours {
-		nearest = min(nearest, depthAt(depths, width, height, x+offset[0], y+offset[1]))
+		neighbour, isInside := neighbourIndex(width, height, x+offset[0], y+offset[1])
+		if !isInside || owners[neighbour] == noOwner {
+			continue
+		}
+		isBehind := owner != noOwner && owners[neighbour] != owner && depths[neighbour] < depths[index]-overlapDepth
+		if isEmpty || isBehind {
+			return true
+		}
 	}
-	return [2]uint8{Transparent, outline}[boolToInt(!math.IsInf(nearest, 1))], nearest
+	return false
 }
 
-func depthAt(depths []float64, width, height, x, y int) float64 {
-	if x < 0 || y < 0 || x >= width || y >= height {
-		return math.Inf(1)
-	}
-	return depths[y*width+x]
+func neighbourIndex(width, height, x, y int) (int, bool) {
+	return y*width + x, x >= 0 && y >= 0 && x < width && y < height
 }
 
 // ===== Internal =====
