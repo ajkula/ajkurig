@@ -124,7 +124,7 @@ var solidByWord = map[string]bool{"no": false, "yes": true}
 
 var pictureMirrors = [2]func(picture image.Image) image.Image{keepPicture, mirrorPicture}
 
-var paletteMixers =[2]func(palette []colorx.RGB, steps int) []colorx.RGB{colorx.Mixes, colorx.TripleMixes}
+var paletteMixers = [2]func(palette []colorx.RGB, steps int) []colorx.RGB{colorx.Mixes, colorx.TripleMixes}
 
 var poseAxes = []sprite.Axis{sprite.AxisZ, sprite.AxisX, sprite.AxisY}
 
