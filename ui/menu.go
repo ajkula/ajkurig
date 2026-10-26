@@ -90,7 +90,7 @@ const (
 	drumArrowIndent          = 6
 	drumFadePerSlot          = 0.75
 	drumEasing               = 16
-	drumRepeatDelay          = 2
+	DrumRepeatDelay          = 2
 	drumRepeatInterval       = 0.28
 	drumArrowWidth           = 24
 	drumArrowHeight          = 7
@@ -220,7 +220,7 @@ func (d *Drum) step(controls input.Controls, deltaSeconds float32) int {
 	direction := mathx.BoolToIndex(held&input.ActionDown != 0) - mathx.BoolToIndex(held&input.ActionUp != 0)
 	isFreshPress := pressed&(input.ActionUp|input.ActionDown) != 0
 	d.HoldSeconds = (d.HoldSeconds + deltaSeconds) * mathx.BoolToFloat(direction != 0 && !isFreshPress)
-	repeats := mathx.RepeatCount(d.HoldSeconds, drumRepeatDelay, drumRepeatInterval) - mathx.RepeatCount(d.HoldSeconds-deltaSeconds, drumRepeatDelay, drumRepeatInterval)
+	repeats := mathx.RepeatCount(d.HoldSeconds, DrumRepeatDelay, drumRepeatInterval) - mathx.RepeatCount(d.HoldSeconds-deltaSeconds, DrumRepeatDelay, drumRepeatInterval)
 	fresh := mathx.BoolToIndex(pressed&input.ActionDown != 0) - mathx.BoolToIndex(pressed&input.ActionUp != 0)
 	return fresh + direction*repeats
 }
