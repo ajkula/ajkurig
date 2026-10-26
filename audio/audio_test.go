@@ -232,7 +232,7 @@ func TestExtraLayersPlayChordTonesInEverySong(t *testing.T) {
 	for _, song := range exampleSongs() {
 		notesPerChannel := [TrackerChannels]int{}
 		for _, pattern := range song.Patterns {
-			chords := detectChords(pattern.Rows)
+			chords := DetectChords(pattern.Rows)
 			for rowIndex, row := range pattern.Rows {
 				for channel, cell := range row {
 					notesPerChannel[channel] += boolToIndex(cell.Note >= 0)

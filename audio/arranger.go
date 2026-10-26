@@ -56,7 +56,7 @@ var pluckChordSteps = [4]int{0, 1, 2, 1}
 
 func ArrangeExtraLayers(song *Song) {
 	for _, pattern := range song.Patterns {
-		chords := detectChords(pattern.Rows)
+		chords := DetectChords(pattern.Rows)
 		for _, arranger := range extraLayerArrangers {
 			arrangeIfEmpty(pattern.Rows, chords, song, arranger.Channel, arranger.Arrange)
 		}
@@ -68,6 +68,16 @@ func (c ChordTones) Tone(step, octave int) int {
 	return octave*12 + positiveModulo(c.Root, 12) + offsets[positiveModulo(step, 3)] + 12*floorDivide(step, 3)
 }
 
+func DetectChords(rows [][TrackerChannels]TrackerCell) []ChordTones {
+	chords := make([]ChordTones, len(rows))
+	current := firstChord(rows)
+	for index, row := range rows {
+		current = chordFromCell(row[ChannelChords], current)
+		chords[index] = current
+	}
+	return chords
+}
+
 // ===== Internal =====
 
 func arrangeIfEmpty(rows [][TrackerChannels]TrackerCell, chords []ChordTones, song *Song, channel int, arrange layerArranger) {
@@ -77,16 +87,6 @@ func arrangeIfEmpty(rows [][TrackerChannels]TrackerCell, chords []ChordTones, so
 		}
 	}
 	arrange(rows, chords, song)
-}
-
-func detectChords(rows [][TrackerChannels]TrackerCell) []ChordTones {
-	chords := make([]ChordTones, len(rows))
-	current := firstChord(rows)
-	for index, row := range rows {
-		current = chordFromCell(row[ChannelChords], current)
-		chords[index] = current
-	}
-	return chords
 }
 
 func firstChord(rows [][TrackerChannels]TrackerCell) ChordTones {
