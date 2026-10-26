@@ -1,6 +1,8 @@
 package shell
 
 import (
+	"maps"
+
 	"github.com/hajimehoshi/ebiten/v2"
 	"github.com/hajimehoshi/ebiten/v2/text/v2"
 
@@ -215,7 +217,7 @@ func (s *Shell) RecordScoreAs(initials string) {
 		return
 	}
 	s.IsRecorded = true
-	s.NewEntryRank = s.App.Scores.Insert(scores.Entry{Initials: initials, Score: status.Score, Seconds: status.Seconds, Stats: status.Stats})
+	s.NewEntryRank = s.App.Scores.Insert(scores.Entry{Initials: initials, Score: status.Score, Seconds: status.Seconds, Stats: maps.Clone(status.Stats)})
 	s.App.SaveScores()
 }
 
