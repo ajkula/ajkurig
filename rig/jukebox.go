@@ -13,9 +13,9 @@ type Jukebox struct {
 	RotationSeconds float32
 	BannerSeconds   float32
 	Banner          ui.Banner
+	Random          rng.Random
 	app             *App
 	slot            int
-	random          rng.Random
 }
 
 // ===== Constants =====
@@ -35,7 +35,7 @@ func NewJukebox(app *App) *Jukebox {
 		BannerSeconds:   defaultBannerSeconds,
 		app:             app,
 		slot:            noSlot,
-		random:          rng.New(uint32(time.Now().UnixNano())),
+		Random:          rng.New(uint32(time.Now().UnixNano())),
 	}
 }
 
@@ -83,7 +83,7 @@ func (j *Jukebox) Update(slot int, deltaSeconds float32) {
 	j.slot = slot
 	songCount := j.app.Audio.SongCount()
 	if isFirstObservation {
-		j.Play(j.NextEnabled((j.random.Below(songCount) + songCount - 1) % songCount))
+		j.Play(j.NextEnabled((j.Random.Below(songCount) + songCount - 1) % songCount))
 		return
 	}
 	isCurrentDisabled := !j.IsSongEnabled(j.app.Audio.CurrentSong())

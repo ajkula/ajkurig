@@ -49,8 +49,12 @@ func newControlsScreen(shell *Shell) *ControlsScreen {
 }
 
 func (c *ControlsScreen) Enter(app *rig.App) {
-	c.Device = app.Input.LastDevice()
-	c.bindings = app.Input.Bindings()
+	c.UseDevice(app.Input.LastDevice())
+}
+
+func (c *ControlsScreen) UseDevice(device input.Device) {
+	c.Device = device
+	c.bindings = c.Shell.App.Input.Bindings()
 	c.bindings = c.bindings.Clone()
 	c.Step = c.essentialCount() * mathx.BoolToIndex(c.bindings.IsCustomized(c.Device))
 	c.ListenSeconds, c.Message = 0, ""
