@@ -210,6 +210,18 @@ func (e *Engine) IsMusicOn() bool {
 	return !e.wanted.isMusicMuted
 }
 
+func (e *Engine) MusicVolume() float32 {
+	return e.readSettings().musicVolume
+}
+
+func (e *Engine) EffectsVolume() float32 {
+	return e.readSettings().effectsVolume
+}
+
+func (e *Engine) IsPlaylistEmpty() bool {
+	return e.readSettings().isPlaylistEmpty
+}
+
 func (e *Engine) SetMusicOn(isOn bool) {
 	e.changeSettings(func(wanted *engineSettings) { wanted.isMusicMuted = !isOn })
 }
@@ -231,6 +243,15 @@ func (e *Engine) Read(buffer []byte) (int, error) {
 }
 
 // ===== Internal =====
+
+func (e *Engine) readSettings() engineSettings {
+	if e == nil {
+		return engineSettings{}
+	}
+	e.mutex.Lock()
+	defer e.mutex.Unlock()
+	return e.wanted
+}
 
 func (e *Engine) changeSettings(change func(wanted *engineSettings)) {
 	if e == nil {
@@ -315,7 +336,7 @@ func (e *Engine) renderMusic() (float32, float32) {
 	if e.tracker == nil {
 		return 0, 0
 	}
-	e.crossfade = min(1, e.crossfade+1/(songCrossfadeSeconds*sampleRate))
+	e.crossfade = min(1, e.crossfade+1/float32(songCrossfadeSeconds*sampleRate))
 	left, right := e.tracker.Render()
 	fadingLeft, fadingRight := e.renderFadingTracker()
 	return e.room.Process(left*e.crossfade+fadingLeft*(1-e.crossfade), right*e.crossfade+fadingRight*(1-e.crossfade))

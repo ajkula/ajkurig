@@ -269,6 +269,40 @@ func TestSongCrossfadeStaysClean(t *testing.T) {
 	}
 }
 
+func TestEngineReportsTheVolumesAndPlaylistItWasGiven(t *testing.T) {
+	engine := NewSilentEngine(NewSoundBank(), NewSignalBoard())
+	engine.SetMusicVolume(0.3)
+	engine.SetEffectsVolume(0.6)
+	engine.SetPlaylistEmpty(true)
+	if engine.MusicVolume() != 0.3 || engine.EffectsVolume() != 0.6 || !engine.IsPlaylistEmpty() {
+		t.Fatalf("music %.2f effects %.2f empty %v", engine.MusicVolume(), engine.EffectsVolume(), engine.IsPlaylistEmpty())
+	}
+	var missing *Engine
+	if missing.MusicVolume() != 0 || missing.IsPlaylistEmpty() {
+		t.Fatal("a missing engine must report silence")
+	}
+}
+
+func TestSelectedSongReplacesTheOldOneAfterTheCrossfade(t *testing.T) {
+	engine := NewSilentEngine(NewSoundBank(), NewSignalBoard())
+	engine.SetSongs(exampleSongs())
+	engine.applyControls()
+	engine.SelectSong(1)
+	engine.applyControls()
+	for range songCrossfadeSeconds * sampleRate / 2 {
+		engine.renderMusic()
+	}
+	if engine.crossfade < 0.45 || engine.crossfade > 0.55 || engine.fadingTracker == nil {
+		t.Fatalf("halfway through the crossfade the new song is at %.2f", engine.crossfade)
+	}
+	for range songCrossfadeSeconds*sampleRate/2 + 1 {
+		engine.renderMusic()
+	}
+	if engine.crossfade != 1 || engine.fadingTracker != nil || engine.tracker.song != engine.songs[1] {
+		t.Fatalf("after the crossfade the new song is at %.2f and the old one still plays: %v", engine.crossfade, engine.fadingTracker != nil)
+	}
+}
+
 func TestMusicPreviewPlaysSeeksAndAuditions(t *testing.T) {
 	preview := NewMusicPreview()
 	preview.SetSong(exampleSongs()[0])
