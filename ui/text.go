@@ -47,6 +47,9 @@ type Text struct {
 	scaledFaces map[*text.GoTextFace]text.Face
 	faceScale   float32
 	options     text.DrawOptions
+	cache       map[textKey]*cachedText
+	cacheScale  float32
+	blitOptions ebiten.DrawImageOptions
 }
 
 // ===== Constants =====
@@ -111,6 +114,8 @@ func NewText(theme *Theme, files FontFiles) *Text {
 		weights:     map[*text.GoTextFaceSource]int{medium: 0, bold: 1},
 		scaledFaces: map[*text.GoTextFace]text.Face{},
 		faceScale:   1,
+		cache:       map[textKey]*cachedText{},
+		cacheScale:  1,
 	}
 	textKit.faces = [faceKindCount]*text.GoTextFace{
 		FaceSmall:   {Source: bold, Size: theme.SmallSize},
@@ -127,6 +132,7 @@ func NewText(theme *Theme, files FontFiles) *Text {
 
 func (t *Text) ResetFaces() {
 	clear(t.scaledFaces)
+	t.clearCache()
 }
 
 func (t *Text) Size(kind FaceKind) float32 {
@@ -137,15 +143,12 @@ func (t *Text) Draw(screen *ebiten.Image, message string, kind FaceKind, x, y fl
 	if message == "" || alpha <= 0 {
 		return
 	}
-	face := t.faces[kind]
-	isSmall := kind == FaceSmall
-	style := textStyles[mathx.BoolToIndex(isSmall)]
-	scaledFace := t.scaledFace(face)
-	options := &t.options
-	options.PrimaryAlign = align
-	options.LineSpacing = face.Size * float64(draw.Scale) * lineSpacingRatio
-	t.drawPass(screen, message, scaledFace, x, y, style.Shadows, colorx.NRGBA(t.Theme.Outline, alpha*style.ShadowAlpha))
-	t.drawPass(screen, message, scaledFace, x, y, style.Strokes, colorx.NRGBA(mathx.Pick(isSmall, tint, t.Theme.Text), alpha))
+	scaledX, scaledY := snapToSubpixel(x*draw.Scale), snapToSubpixel(y*draw.Scale)
+	if alpha < 1 {
+		t.drawDirect(screen, message, kind, scaledX, scaledY, tint, alpha, align)
+		return
+	}
+	t.drawCached(screen, message, kind, scaledX, scaledY, tint, align)
 }
 
 func (t *Text) Width(message string, kind FaceKind) float32 {
@@ -176,13 +179,25 @@ func (t *Text) Wrap(message string, kind FaceKind, maximumWidth float32) string 
 
 // ===== Internal =====
 
-func (t *Text) drawPass(screen *ebiten.Image, message string, face text.Face, x, y float32, offsets [][2]float32, tint color.Color) {
+func (t *Text) drawDirect(screen *ebiten.Image, message string, kind FaceKind, scaledX, scaledY float64, tint colorx.RGB, alpha float32, align text.Align) {
+	face := t.faces[kind]
+	isSmall := kind == FaceSmall
+	style := textStyles[mathx.BoolToIndex(isSmall)]
+	scaledFace := t.scaledFace(face)
+	options := &t.options
+	options.PrimaryAlign = align
+	options.LineSpacing = face.Size * float64(draw.Scale) * lineSpacingRatio
+	t.drawPass(screen, message, scaledFace, scaledX, scaledY, style.Shadows, colorx.NRGBA(t.Theme.Outline, alpha*style.ShadowAlpha))
+	t.drawPass(screen, message, scaledFace, scaledX, scaledY, style.Strokes, colorx.NRGBA(mathx.Pick(isSmall, tint, t.Theme.Text), alpha))
+}
+
+func (t *Text) drawPass(screen *ebiten.Image, message string, face text.Face, scaledX, scaledY float64, offsets [][2]float32, tint color.Color) {
 	options := &t.options
 	options.ColorScale.Reset()
 	options.ColorScale.ScaleWithColor(tint)
 	for _, offset := range offsets {
 		options.GeoM.Reset()
-		options.GeoM.Translate(float64((x+offset[0]*textOutlineWidth)*draw.Scale), float64((y+offset[1]*textOutlineWidth)*draw.Scale))
+		options.GeoM.Translate(scaledX+float64(offset[0]*textOutlineWidth*draw.Scale), scaledY+float64(offset[1]*textOutlineWidth*draw.Scale))
 		text.Draw(screen, message, face, options)
 	}
 }
