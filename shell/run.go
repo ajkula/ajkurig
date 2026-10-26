@@ -106,7 +106,7 @@ func (l *LevelUpScreen) Update(frame *rig.Frame) {
 		return
 	}
 	l.Shell.Game.(LevelUpGame).ChooseOffer(l.Selected)
-	app.Switch(ScreenPlay)
+	app.Switch(mathx.Pick(l.Shell.Game.Status().PendingLevelUps > 0, ScreenPlay, ScreenLevelUp))
 }
 
 func (l *LevelUpScreen) Draw(frame *rig.Frame, screen *ebiten.Image) {

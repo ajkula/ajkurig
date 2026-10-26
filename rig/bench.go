@@ -8,7 +8,9 @@ import (
 	"github.com/hajimehoshi/ebiten/v2"
 	"github.com/hajimehoshi/ebiten/v2/text/v2"
 
+	"github.com/ajkula/ajkurig/audio"
 	"github.com/ajkula/ajkurig/i18n"
+	"github.com/ajkula/ajkurig/mathx"
 	"github.com/ajkula/ajkurig/ui"
 )
 
@@ -62,7 +64,7 @@ func (b *Bench) DrawPanel(screen *ebiten.Image, x, y float32) {
 func (b *Bench) DebugLines() []string {
 	b.refreshIfDue()
 	lines := b.app.Input.DescribeDevices(b.app.frame.Controls)
-	lines = append(lines, "Music: "+b.app.Audio.PlayingDescription()+fmt.Sprintf("   layers %d/16", b.app.Audio.AudibleLayerCount()))
+	lines = append(lines, b.describeMusic())
 	return append(lines, b.moduleLines...)
 }
 
@@ -87,6 +89,21 @@ func (b *Bench) refreshIfDue() {
 	}
 	b.leftColumn, b.rightColumn = strings.Join(left, "\n"), strings.Join(right, "\n")
 	b.refreshModuleLines()
+}
+
+func (b *Bench) describeMusic() string {
+	engine := b.app.Audio
+	board := engine.Signals()
+	var line strings.Builder
+	line.WriteString("Music playing: " + engine.PlayingDescription() + fmt.Sprintf("   layers %d/16 ", engine.AudibleLayerCount()))
+	for index, name := range board.Names()[1:] {
+		fmt.Fprintf(&line, " %s %.2f", name, board.Value(audio.SignalID(index+1)))
+	}
+	titles := make([]string, 0, engine.SongCount())
+	for index := range engine.SongCount() {
+		titles = mathx.AppendIf(titles, engine.SongTitle(index), b.app.Jukebox.IsSongEnabled(index))
+	}
+	return line.String() + "   enabled: " + strings.Join(titles, ", ")
 }
 
 func appendColumn(column []string, line string, shouldAppend bool) []string {

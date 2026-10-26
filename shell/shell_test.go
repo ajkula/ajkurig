@@ -99,6 +99,24 @@ func TestLevelUpOffersCardsAndApplyTheChoice(t *testing.T) {
 	}
 }
 
+func TestChainedLevelUpsOpenTheNextCardsWithoutPlaying(t *testing.T) {
+	app, game, _ := newTestApp(t)
+	app.Settings.Language = "en"
+	stepFor(app, 6, 0)
+	press(app, input.ActionConfirm)
+	game.levelUps = 2
+	stepFor(app, 0.5, 0)
+	simulated := game.simulated
+	press(app, input.ActionConfirm)
+	if app.CurrentScreen() != ScreenLevelUp || game.simulated != simulated || game.levelUps != 1 {
+		t.Fatalf("screen %q, simulated %d -> %d, level ups left %d", app.CurrentScreen(), simulated, game.simulated, game.levelUps)
+	}
+	press(app, input.ActionConfirm)
+	if app.CurrentScreen() != ScreenPlay || game.levelUps != 0 {
+		t.Fatalf("last card went to %q with %d level ups left", app.CurrentScreen(), game.levelUps)
+	}
+}
+
 func TestFirstLaunchAsksForTheLanguage(t *testing.T) {
 	app, _, _ := newTestApp(t)
 	stepFor(app, 6, 0)
