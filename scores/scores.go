@@ -38,7 +38,7 @@ const (
 	TableFileName       = "highscores.json"
 	DefaultAlphabet     = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789."
 	DefaultInitials     = "AAA"
-	letterRepeatDelay   = 1
+	LetterRepeatDelay   = 1
 	letterRepeatSeconds = 0.07
 )
 
@@ -136,7 +136,7 @@ func NewNameEntry(initials string, length int, alphabet string) NameEntry {
 
 func (n *NameEntry) Update(letterDelta, cursorDelta int, heldDirection int, isFreshPress bool, deltaSeconds float32) bool {
 	n.HoldSeconds = (n.HoldSeconds + deltaSeconds) * mathx.BoolToFloat(heldDirection != 0 && !isFreshPress)
-	repeats := mathx.RepeatCount(n.HoldSeconds, letterRepeatDelay, letterRepeatSeconds) - mathx.RepeatCount(n.HoldSeconds-deltaSeconds, letterRepeatDelay, letterRepeatSeconds)
+	repeats := mathx.RepeatCount(n.HoldSeconds, LetterRepeatDelay, letterRepeatSeconds) - mathx.RepeatCount(n.HoldSeconds-deltaSeconds, LetterRepeatDelay, letterRepeatSeconds)
 	totalDelta := letterDelta + heldDirection*repeats
 	n.shiftLetter(totalDelta)
 	n.Cursor = mathx.ClampInt(n.Cursor+cursorDelta, 0, len(n.Letters)-1)

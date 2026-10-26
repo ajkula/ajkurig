@@ -109,7 +109,7 @@ const (
 	rankingScrollSeconds   = 5
 	rankingIntroSeconds    = 2.4
 	boardCycleSeconds      = 2*rankingPauseSeconds + rankingScrollSeconds
-	attractBoardSeconds    = rankingIntroSeconds + boardCycleSeconds
+	AttractBoardSeconds    = rankingIntroSeconds + boardCycleSeconds
 	demoBenchLeft          = 16
 	demoBenchTop           = 470
 )
@@ -171,7 +171,7 @@ func (s *Shell) GoHomeWithRanking() {
 	rank := s.NewEntryRank
 	s.GoHome()
 	s.NewEntryRank = rank
-	s.BoardSeconds = attractBoardSeconds
+	s.BoardSeconds = AttractBoardSeconds
 }
 
 func (s *Shell) StartDemo() {
@@ -257,7 +257,7 @@ func (s *Shell) nextDemoClipIfDone() {
 	}
 	s.nextDemoClip()
 	isBoardDue := s.DemoSlot > 0 && s.DemoSlot%s.Options.ClipsPerBoard == 0
-	s.BoardSeconds = mathx.Pick(isBoardDue, s.BoardSeconds, attractBoardSeconds)
+	s.BoardSeconds = mathx.Pick(isBoardDue, s.BoardSeconds, AttractBoardSeconds)
 }
 
 func (s *Shell) nextDemoClip() {

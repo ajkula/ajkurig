@@ -110,3 +110,22 @@ func TestLabelsShowDefaultsThenCustomBindings(t *testing.T) {
 		t.Fatalf("back labels %q", labels)
 	}
 }
+
+func TestButtonLabelsFollowTheLastDevice(t *testing.T) {
+	layout := NewLayout(testRemaps, 2)
+	reader := NewReader(layout)
+	reader.lastDevice = pickDevice(DeviceGamepad, true, false)
+	if reader.ButtonLabel(ActionStart) != "ENTER" || reader.ButtonLabel(ActionSelect) != "BACKSPACE" {
+		t.Fatalf("keyboard labels %q %q", reader.ButtonLabel(ActionStart), reader.ButtonLabel(ActionSelect))
+	}
+	bindings := reader.Bindings()
+	*bindings.Binding(DeviceGamepad, 0), *bindings.Binding(DeviceGamepad, 1) = 2, 0
+	reader.UseBindings(bindings)
+	reader.lastDevice = pickDevice(DeviceKeyboard, false, true)
+	if reader.ButtonLabel(ActionStart) != "START" || reader.ButtonLabel(testFire) != "BUTTON 2" {
+		t.Fatalf("gamepad labels %q %q", reader.ButtonLabel(ActionStart), reader.ButtonLabel(testFire))
+	}
+	if pickDevice(DeviceGamepad, false, false) != DeviceGamepad {
+		t.Fatal("idle input changed the device")
+	}
+}

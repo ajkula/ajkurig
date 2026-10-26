@@ -129,7 +129,7 @@ func newMainMenu(shell *Shell) *MenuScreen {
 		if shell.BoardSeconds <= 0 {
 			return false
 		}
-		shell.drawRankingAttract(frame, image, attractBoardSeconds-shell.BoardSeconds)
+		shell.drawRankingAttract(frame, image, AttractBoardSeconds-shell.BoardSeconds)
 		return true
 	}
 	screen.DrawExtra = func(frame *rig.Frame, image *ebiten.Image) {

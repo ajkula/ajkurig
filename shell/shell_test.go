@@ -4,8 +4,12 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/hajimehoshi/ebiten/v2/text/v2"
+
 	"github.com/ajkula/ajkurig/input"
+	"github.com/ajkula/ajkurig/mathx"
 	"github.com/ajkula/ajkurig/rig"
+	"github.com/ajkula/ajkurig/scores"
 	"github.com/ajkula/ajkurig/ui"
 )
 
@@ -227,4 +231,21 @@ func stepFor(app *rig.App, seconds float32, held input.Action) {
 func press(app *rig.App, action input.Action) {
 	app.Step(input.Controls{Held: action, JustPressed: action, RawJustPressed: input.NoInput})
 	stepFor(app, rig.MenuLockSeconds+0.05, 0)
+}
+
+func TestBoardColumnsFitTheLongestRow(t *testing.T) {
+	const minimumGap = 48
+	longest := [4]string{scores.RankOrdinals[scores.DefaultTableSize-1], scores.FormatThousands(scores.MaximumScore), scores.FormatClock(99*60 + 59), "WWW"}
+	previousRight := float32(0)
+	for index, column := range DefaultColumns() {
+		width := ui.PixelTextWidth(longest[index], rankingRowPixel)
+		left := column.X - width*mathx.BoolToFloat(column.Align == text.AlignEnd)
+		if left-previousRight < minimumGap {
+			t.Fatalf("column %s starts %.0f px after the previous one", column.Header, left-previousRight)
+		}
+		previousRight = left + width
+	}
+	if previousRight > rig.DefaultWidth {
+		t.Fatalf("the board overflows the screen at %.0f px", previousRight)
+	}
 }
