@@ -8,7 +8,6 @@ import (
 
 	"github.com/ajkula/ajkurig/colorx"
 	"github.com/ajkula/ajkurig/i18n"
-	"github.com/ajkula/ajkurig/input"
 	"github.com/ajkula/ajkurig/mathx"
 	"github.com/ajkula/ajkurig/rig"
 	"github.com/ajkula/ajkurig/ui"
@@ -116,14 +115,7 @@ func newMainMenu(shell *Shell) *MenuScreen {
 		}},
 	}
 	screen.BeforeUpdate = func(frame *rig.Frame) bool {
-		if shell.dismissBoardIfPressed(frame) {
-			return true
-		}
-		if frame.Controls.JustPressed&input.ActionSelect == 0 {
-			return false
-		}
-		app.ChangeSettings(func(settings *rig.Settings) { settings.IsBenchmarkHidden = !settings.IsBenchmarkHidden })
-		return true
+		return shell.dismissBoardIfPressed(frame) || shell.toggleBenchIfSelected(frame)
 	}
 	screen.DrawInstead = func(frame *rig.Frame, image *ebiten.Image) bool {
 		if shell.BoardSeconds <= 0 {
@@ -316,7 +308,7 @@ func newPauseMenu(shell *Shell) *MenuScreen {
 	app := shell.App
 	screen := &MenuScreen{
 		Shell: shell, Title: Label("title.paused"), TitleColor: func() colorx.RGB { return app.Kit.Theme.Text }, Hints: []string{"hint.menu_resume"},
-		OnBack: func() { app.Switch(ScreenPlay) },
+		OnBack: func() { app.Switch(ScreenPlay) }, BeforeUpdate: shell.toggleBenchIfSelected, ShowsBench: true,
 		DrawScene: func(frame *rig.Frame, screen *ebiten.Image) {
 			app.DrawWorld(frame, screen)
 			app.DrawHUD(frame, screen)

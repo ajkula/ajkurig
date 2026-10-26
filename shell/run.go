@@ -81,6 +81,7 @@ func (p *PlayScreen) Draw(frame *rig.Frame, screen *ebiten.Image) {
 	app := p.Shell.App
 	app.DrawWorld(frame, screen)
 	app.DrawHUD(frame, screen)
+	p.Shell.drawBenchIf(screen)
 	p.Shell.DrawMusicBanner(screen)
 }
 

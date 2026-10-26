@@ -249,3 +249,18 @@ func TestBoardColumnsFitTheLongestRow(t *testing.T) {
 		t.Fatalf("the board overflows the screen at %.0f px", previousRight)
 	}
 }
+
+func TestSelectInPauseTogglesTheBenchShownDuringTheRun(t *testing.T) {
+	app, _, shell := newTestApp(t)
+	shell.StartRun()
+	stepFor(app, 0.5, 0)
+	press(app, input.ActionPause)
+	press(app, input.ActionSelect)
+	if app.CurrentScreen() != ScreenPause || !app.Settings.IsBenchmarkHidden {
+		t.Fatalf("select in pause: screen %q, hidden %v", app.CurrentScreen(), app.Settings.IsBenchmarkHidden)
+	}
+	press(app, input.ActionSelect)
+	if app.Settings.IsBenchmarkHidden {
+		t.Fatal("select in pause did not show the bench again")
+	}
+}

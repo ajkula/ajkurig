@@ -281,10 +281,19 @@ func (s *Shell) drawDemoClip(screen *ebiten.Image) {
 }
 
 func (s *Shell) drawBenchIf(screen *ebiten.Image) {
-	if !s.IsDemoRunning || s.App.Settings.IsBenchmarkHidden {
+	hasWorld := s.IsDemoRunning || s.App.IsInRun
+	if !hasWorld || s.App.Settings.IsBenchmarkHidden {
 		return
 	}
 	s.App.Bench.DrawPanel(screen, demoBenchLeft, demoBenchTop)
+}
+
+func (s *Shell) toggleBenchIfSelected(frame *rig.Frame) bool {
+	if frame.Controls.JustPressed&input.ActionSelect == 0 {
+		return false
+	}
+	s.App.ChangeSettings(func(settings *rig.Settings) { settings.IsBenchmarkHidden = !settings.IsBenchmarkHidden })
+	return true
 }
 
 func (s *Shell) dismissBoardIfPressed(frame *rig.Frame) bool {
