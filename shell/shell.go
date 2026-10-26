@@ -27,6 +27,7 @@ type RunStatus struct {
 	PendingLevelUps int
 	Stats           map[string]int
 	Summary         string
+	Details         string
 }
 
 type Game interface {

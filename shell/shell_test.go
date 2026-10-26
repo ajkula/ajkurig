@@ -126,6 +126,26 @@ func TestOptionsReturnWhereTheyWereOpened(t *testing.T) {
 	}
 }
 
+func TestEffectsAreQuietOnlyBehindTheDemo(t *testing.T) {
+	app, game, _ := newTestApp(t)
+	app.Settings.Language = "en"
+	stepFor(app, 0.1, 0)
+	introVolume := app.Audio.EffectsVolume()
+	stepFor(app, 6, 0)
+	menuVolume := app.Audio.EffectsVolume()
+	press(app, input.ActionConfirm)
+	playVolume := app.Audio.EffectsVolume()
+	game.score, game.isOver = 10, true
+	stepFor(app, 0.5, 0)
+	for range 3 {
+		press(app, input.ActionConfirm)
+	}
+	gameOverVolume := app.Audio.EffectsVolume()
+	if app.CurrentScreen() != ScreenGameOver || menuVolume >= introVolume || playVolume != introVolume || gameOverVolume != introVolume {
+		t.Fatalf("screen %q, effects volume intro %.2f menu %.2f play %.2f game over %.2f", app.CurrentScreen(), introVolume, menuVolume, playVolume, gameOverVolume)
+	}
+}
+
 func (g *fakeGame) StartRun(app *rig.App) {
 	g.runs++
 	g.score, g.seconds, g.isOver, g.levelUps = 0, 0, false, 0

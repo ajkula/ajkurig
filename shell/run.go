@@ -44,6 +44,7 @@ const (
 	nameEntryArrowGap     = 14
 	nameEntryUnderlineGap = 96
 	gameOverRankedTop     = 400
+	gameOverDetailsTop    = 345
 )
 
 // ===== Public API =====
@@ -99,6 +100,7 @@ func (l *LevelUpScreen) Update(frame *rig.Frame) {
 	isNext := frame.Controls.JustPressed&(input.ActionRight|input.ActionDown) != 0
 	count := max(1, len(l.Cards))
 	l.Selected = (l.Selected + count + mathx.BoolToIndex(isNext) - mathx.BoolToIndex(isPrevious)) % count
+	app.IsDebugVisible = app.IsDebugVisible != (frame.Controls.JustPressed&input.ActionSelect != 0)
 	app.PlayMenuEvent(mathx.Pick(isNext || isPrevious, ui.EventNone, ui.EventMoved))
 	if !app.IsConfirming() {
 		return
@@ -201,6 +203,7 @@ func (g *GameOverScreen) Draw(frame *rig.Frame, screen *ebiten.Image) {
 	alpha := ui.Pulse(frame.Clock)*mathx.BoolToFloat(isRanked) + mathx.BoolToFloat(!isRanked)
 	kit.Text.Draw(screen, lines[rankState], ui.FaceBold, kit.Width/2, 250, mathx.Pick(isRanked, theme.Record, theme.Accent), alpha, text.AlignCenter)
 	kit.Text.Draw(screen, shell.RunStatus.Summary, ui.FaceBold, kit.Width/2, 295, theme.Text, 1, text.AlignCenter)
+	kit.Text.Draw(screen, mathx.Pick(isRanked, shell.RunStatus.Details, ""), ui.FaceRegular, kit.Width/2, gameOverDetailsTop, theme.Text, 1, text.AlignCenter)
 	shell.drawRankedLine(frame, screen, gameOverRankedTop)
 	kit.Message(screen, app.Message)
 	choices := i18n.F("gameover.choices", app.Input.ButtonLabel(input.ActionStart), app.Input.ButtonLabel(input.ActionSelect))

@@ -405,7 +405,7 @@ func (a *App) updateAudio(frame *Frame) {
 	if frame.Controls.JustPressed&input.ActionMute != 0 {
 		a.ToggleMusic()
 	}
-	context := mathx.Pick(a.IsInRun, float32(menuEffectsVolume), gameEffectsVolume)
+	context := mathx.Pick(frame.IsDemo, float32(gameEffectsVolume), menuEffectsVolume)
 	a.Audio.SetEffectsVolume(context * float32(a.Settings.EffectsVolumeStep) / VolumeSteps)
 	a.Audio.PushSignals()
 }
