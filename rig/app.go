@@ -93,6 +93,11 @@ const (
 	maximumMusicVolume    = 0.5
 )
 
+var menuEventSounds = [ui.MenuEventCount]audio.SoundID{
+	ui.EventMoved: audio.SoundMenuMove, ui.EventAdjusted: audio.SoundMenuMove, ui.EventDrumMoved: audio.SoundMenuMove,
+	ui.EventActivated: audio.SoundMenuSelect, ui.EventDrumChosen: audio.SoundMenuSelect,
+}
+
 // ===== Public API =====
 
 func NewApp(config Config) *App {
@@ -189,12 +194,8 @@ func (a *App) PlaySoundIf(id audio.SoundID, shouldPlay bool) {
 }
 
 func (a *App) PlayMenuEvent(event ui.MenuEvent) {
-	sounds := map[ui.MenuEvent]audio.SoundID{
-		ui.EventMoved: audio.SoundMenuMove, ui.EventAdjusted: audio.SoundMenuMove, ui.EventDrumMoved: audio.SoundMenuMove,
-		ui.EventActivated: audio.SoundMenuSelect, ui.EventDrumChosen: audio.SoundMenuSelect,
-	}
-	sound, hasSound := sounds[event]
-	a.PlaySoundIf(sound, hasSound)
+	sound := menuEventSounds[event]
+	a.PlaySoundIf(sound, sound != audio.SoundNone)
 }
 
 func (a *App) Hint(key string) string {

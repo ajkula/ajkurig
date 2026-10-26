@@ -66,6 +66,7 @@ const (
 	EventDrumMoved
 	EventDrumChosen
 	EventDrumCancelled
+	MenuEventCount
 )
 
 const (
