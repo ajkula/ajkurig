@@ -23,6 +23,7 @@ import (
 
 type Config struct {
 	Title           string
+	WindowTitle     string
 	SaveFolder      string
 	Width           float32
 	Height          float32
@@ -122,7 +123,7 @@ func NewApp(config Config) *App {
 
 func (a *App) Run() error {
 	ebiten.SetWindowSize(int(a.Config.Width), int(a.Config.Height))
-	ebiten.SetWindowTitle(a.Config.Title)
+	ebiten.SetWindowTitle(a.Config.WindowTitle)
 	ebiten.SetWindowResizingMode(ebiten.WindowResizingModeEnabled)
 	ebiten.SetWindowClosingHandled(true)
 	a.Start()
@@ -316,6 +317,7 @@ func (a *App) ToggleMusic() {
 // ===== Internal =====
 
 func withDefaults(config Config) Config {
+	config.WindowTitle = mathx.Pick(config.WindowTitle == "", config.WindowTitle, config.Title)
 	config.Width = mathx.Pick(config.Width <= 0, config.Width, DefaultWidth)
 	config.Height = mathx.Pick(config.Height <= 0, config.Height, DefaultHeight)
 	config.TicksPerSecond = mathx.Pick(config.TicksPerSecond <= 0, config.TicksPerSecond, DefaultTicksPerSecond)
