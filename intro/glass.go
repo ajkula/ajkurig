@@ -22,10 +22,16 @@ type GlassShard struct {
 }
 
 type ShatteredGlass struct {
-	Cracks    []GlassCrack
-	Shards    []GlassShard
-	CoreColor colorx.RGB
-	GlowColor colorx.RGB
+	Cracks []GlassCrack
+	Shards []GlassShard
+	Colors GlassColors
+}
+
+type GlassColors struct {
+	Core      colorx.RGB
+	Glow      colorx.RGB
+	Shard     colorx.RGB
+	GlowAlpha float32
 }
 
 // ===== Constants =====
@@ -39,7 +45,6 @@ const (
 	craterCrackCount   = 34
 	craterRadius       = 46
 	crackGlowWidth     = 4
-	crackGlowAlpha     = 0.24
 	shardAlphaMaximum  = 0.13
 	shardChance        = 0.35
 	ringConnectChance  = 0.75
@@ -50,9 +55,9 @@ var ringRadii = []float32{70, 150, 260, 410, 600}
 
 // ===== Public API =====
 
-func NewShatteredGlass(impactX, impactY float32, seed uint32, coreColor, glowColor colorx.RGB) *ShatteredGlass {
+func NewShatteredGlass(impactX, impactY float32, seed uint32, colors GlassColors) *ShatteredGlass {
 	random := rng.New(seed)
-	glass := &ShatteredGlass{CoreColor: coreColor, GlowColor: glowColor}
+	glass := &ShatteredGlass{Colors: colors}
 	radials := make([][][2]float32, radialCrackCount)
 	for index := range radialCrackCount {
 		angle := (float32(index) + random.Between(-0.3, 0.3)) / radialCrackCount * mathx.Tau
@@ -72,13 +77,13 @@ func NewShatteredGlass(impactX, impactY float32, seed uint32, coreColor, glowCol
 
 func (g *ShatteredGlass) Draw(screen *ebiten.Image, alpha float32) {
 	for _, shard := range g.Shards {
-		draw.FillTriangle(screen, shard.Points, g.GlowColor, shard.Alpha*alpha)
+		draw.FillTriangle(screen, shard.Points, g.Colors.Shard, shard.Alpha*alpha)
 	}
 	for _, crack := range g.Cracks {
-		drawCrack(screen, crack, crackGlowWidth, g.GlowColor, crackGlowAlpha*alpha)
+		drawCrack(screen, crack, crackGlowWidth, g.Colors.Glow, g.Colors.GlowAlpha*alpha)
 	}
 	for _, crack := range g.Cracks {
-		drawCrack(screen, crack, crack.Width, g.CoreColor, alpha)
+		drawCrack(screen, crack, crack.Width, g.Colors.Core, alpha)
 	}
 }
 

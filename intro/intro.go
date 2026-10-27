@@ -22,6 +22,8 @@ type Settings struct {
 	SideColor     colorx.RGB
 	CrackColor    colorx.RGB
 	CrackGlow     colorx.RGB
+	GlowAlpha     float32
+	ShardColor    colorx.RGB
 	FlashColor    colorx.RGB
 	BlackSeconds  float32
 	FallSeconds   float32
@@ -77,7 +79,7 @@ const (
 var DefaultSettings = Settings{
 	Text: "GREG's", FontSize: 19,
 	CapColor: colorx.RichLemon, SideColor: colorx.BloodRed,
-	CrackColor: colorx.PaleSilver, CrackGlow: colorx.ElectricBlue, FlashColor: colorx.PaleSilver,
+	CrackColor: colorx.PaleSilver, CrackGlow: colorx.ElectricBlue, GlowAlpha: 0.24, ShardColor: colorx.ElectricBlue, FlashColor: colorx.PaleSilver,
 	BlackSeconds: 0.35, FallSeconds: audio.BombWhistleSeconds, HoldSeconds: 1.7, FadeSeconds: 0.8,
 	SkipPresses: 3, SkipFade: 0.4, FinalWidth: 0.72, StartDistance: 14, ShakeStrength: 16,
 	WhistleSound: audio.SoundBombWhistle, ImpactSounds: []audio.SoundID{audio.SoundBigImpact, audio.SoundGlassShatter},
@@ -145,7 +147,9 @@ func (i *Intro) impactIf(shouldImpact bool) {
 		return
 	}
 	i.HasImpacted = true
-	i.Glass = NewShatteredGlass(i.Width/2, i.Height/2, i.Settings.GlassSeed, i.Settings.CrackColor, i.Settings.CrackGlow)
+	i.Glass = NewShatteredGlass(i.Width/2, i.Height/2, i.Settings.GlassSeed, GlassColors{
+		Core: i.Settings.CrackColor, Glow: i.Settings.CrackGlow, Shard: i.Settings.ShardColor, GlowAlpha: i.Settings.GlowAlpha,
+	})
 	i.sounds = append(i.sounds, i.Settings.ImpactSounds...)
 }
 
