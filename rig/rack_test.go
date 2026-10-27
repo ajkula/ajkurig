@@ -72,6 +72,25 @@ func TestTimingsMeasureEachModule(t *testing.T) {
 	}
 }
 
+func TestModulesSharingANameAreTimedAsOne(t *testing.T) {
+	rack := NewRack("world")
+	rack.Mount(&Func{ID: "enemies", OnUpdate: func(*Frame) { time.Sleep(time.Millisecond) }}, &Func{ID: "player"}, &Func{ID: "enemies", OnDraw: func(*Frame, *ebiten.Image) { time.Sleep(time.Millisecond) }})
+	frame := &Frame{}
+	for range 40 {
+		rack.Update(frame)
+		rack.Draw(frame, nil)
+	}
+	timings := rack.Timings([]ModuleTiming{{Name: "enemies"}})
+	if len(timings) != 3 || timings[1].Name != "enemies" || timings[1].Millis[PhaseUpdate] < 0.5 || timings[1].Millis[PhaseDraw] < 0.5 || timings[0].Millis[PhaseUpdate] != 0 {
+		t.Fatalf("timings %+v", timings)
+	}
+	rack.Enable("enemies", false)
+	rack.Update(frame)
+	if rack.slots[0].isEnabled || rack.slots[2].isEnabled {
+		t.Fatal("enabling by name must reach every slot of that module")
+	}
+}
+
 func BenchmarkRackOverheadPerModule(b *testing.B) {
 	rack := NewRack("world")
 	for range 20 {

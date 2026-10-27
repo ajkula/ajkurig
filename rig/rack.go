@@ -141,8 +141,9 @@ func (r *Rack) Report(report *Report) {
 }
 
 func (r *Rack) Timings(timings []ModuleTiming) []ModuleTiming {
+	first := len(timings)
 	for _, entry := range r.slots {
-		timings = append(timings, entry.timing)
+		timings = appendOrMergeTiming(timings, first, &entry.timing)
 	}
 	return timings
 }
@@ -190,6 +191,19 @@ func (r *Rack) mount(module Module) {
 	entry.resetter, _ = module.(Resetter)
 	entry.reporter, _ = module.(Reporter)
 	r.slots = append(r.slots, entry)
+}
+
+func appendOrMergeTiming(timings []ModuleTiming, first int, timing *ModuleTiming) []ModuleTiming {
+	for index := first; index < len(timings); index++ {
+		if timings[index].Name != timing.Name {
+			continue
+		}
+		for phase := range timings[index].Millis {
+			timings[index].Millis[phase] += timing.Millis[phase]
+		}
+		return timings
+	}
+	return append(timings, *timing)
 }
 
 func (r *Rack) run(phase Phase, frame *Frame, screen *ebiten.Image) {
