@@ -3,6 +3,7 @@ package ui
 import (
 	"bytes"
 	"embed"
+	"image"
 	"image/color"
 	"strings"
 	"sync"
@@ -46,7 +47,9 @@ type Text struct {
 	weights     map[*text.GoTextFaceSource]int
 	scaledFaces map[*text.GoTextFace]text.Face
 	faceScale   float32
-	options     text.DrawOptions
+	layout      text.LayoutOptions
+	glyphs      []text.Glyph
+	glyphDraws  [2]ebiten.DrawImageOptions
 	cache       map[textKey]*cachedText
 	cacheScale  float32
 	blitOptions ebiten.DrawImageOptions
@@ -184,22 +187,46 @@ func (t *Text) drawDirect(screen *ebiten.Image, message string, kind FaceKind, s
 	isSmall := kind == FaceSmall
 	style := textStyles[mathx.BoolToIndex(isSmall)]
 	scaledFace := t.scaledFace(face)
-	options := &t.options
-	options.PrimaryAlign = align
-	options.LineSpacing = face.Size * float64(draw.Scale) * lineSpacingRatio
-	t.drawPass(screen, message, scaledFace, scaledX, scaledY, style.Shadows, colorx.NRGBA(t.Theme.Outline, alpha*style.ShadowAlpha))
-	t.drawPass(screen, message, scaledFace, scaledX, scaledY, style.Strokes, colorx.NRGBA(mathx.Pick(isSmall, tint, t.Theme.Text), alpha))
+	layout := &t.layout
+	layout.PrimaryAlign = align
+	layout.LineSpacing = face.Size * float64(draw.Scale) * lineSpacingRatio
+	t.glyphs = text.AppendGlyphs(t.glyphs[:0], message, scaledFace, layout)
+	t.drawGlyphPass(screen, scaledX, scaledY, style.Shadows, colorx.NRGBA(t.Theme.Outline, alpha*style.ShadowAlpha))
+	t.drawGlyphPass(screen, scaledX, scaledY, style.Strokes, colorx.NRGBA(mathx.Pick(isSmall, tint, t.Theme.Text), alpha))
+	clear(t.glyphs)
 }
 
-func (t *Text) drawPass(screen *ebiten.Image, message string, face text.Face, scaledX, scaledY float64, offsets [][2]float32, tint color.Color) {
-	options := &t.options
-	options.ColorScale.Reset()
-	options.ColorScale.ScaleWithColor(tint)
+func (t *Text) drawGlyphPass(screen *ebiten.Image, scaledX, scaledY float64, offsets [][2]float32, tint color.Color) {
+	tinted, colored := &t.glyphDraws[0], &t.glyphDraws[1]
+	tinted.ColorScale.Reset()
+	tinted.ColorScale.ScaleWithColor(tint)
+	colored.ColorScale.Reset()
+	colored.ColorScale.ScaleAlpha(tinted.ColorScale.A())
+	bounds := screen.Bounds()
 	for _, offset := range offsets {
-		options.GeoM.Reset()
-		options.GeoM.Translate(scaledX+float64(offset[0]*textOutlineWidth*draw.Scale), scaledY+float64(offset[1]*textOutlineWidth*draw.Scale))
-		text.Draw(screen, message, face, options)
+		originX := scaledX + float64(offset[0]*textOutlineWidth*draw.Scale)
+		originY := scaledY + float64(offset[1]*textOutlineWidth*draw.Scale)
+		for index := range t.glyphs {
+			t.drawGlyph(screen, bounds, &t.glyphs[index], originX, originY)
+		}
 	}
+}
+
+func (t *Text) drawGlyph(screen *ebiten.Image, bounds image.Rectangle, glyph *text.Glyph, originX, originY float64) {
+	if glyph.Image == nil || !isGlyphOnScreen(bounds, glyph, originX, originY) {
+		return
+	}
+	options := &t.glyphDraws[mathx.BoolToIndex(glyph.Colored)]
+	options.GeoM.Reset()
+	options.GeoM.Translate(glyph.X, glyph.Y)
+	options.GeoM.Translate(originX, originY)
+	screen.DrawImage(glyph.Image, options)
+}
+
+func isGlyphOnScreen(bounds image.Rectangle, glyph *text.Glyph, originX, originY float64) bool {
+	left, top := originX+glyph.X, originY+glyph.Y
+	size := glyph.Image.Bounds().Size()
+	return left < float64(bounds.Max.X) && top < float64(bounds.Max.Y) && left+float64(size.X) > float64(bounds.Min.X) && top+float64(size.Y) > float64(bounds.Min.Y)
 }
 
 func (t *Text) scaledFace(face *text.GoTextFace) text.Face {

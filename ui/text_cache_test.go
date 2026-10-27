@@ -2,6 +2,7 @@ package ui
 
 import (
 	"fmt"
+	"image"
 	"testing"
 
 	"github.com/hajimehoshi/ebiten/v2"
@@ -47,5 +48,22 @@ func TestTextCacheStaysBoundedAndResets(t *testing.T) {
 	textKit.ResetFaces()
 	if textKit.CachedCount() != 0 {
 		t.Fatal("changing the faces kept stale images")
+	}
+}
+
+func TestOnlyGlyphsTouchingTheScreenAreDrawn(t *testing.T) {
+	bounds := image.Rect(0, 0, 100, 50)
+	glyph := &text.Glyph{Image: ebiten.NewImage(10, 12), X: 2, Y: -9}
+	cases := []struct {
+		originX, originY float64
+		isOnScreen       bool
+	}{
+		{40, 20, true}, {-11.5, 20, true}, {-12, 20, false}, {97.9, 20, true}, {98, 20, false},
+		{40, -2.5, true}, {40, -3, false}, {40, 58.9, true}, {40, 59, false},
+	}
+	for _, testCase := range cases {
+		if isGlyphOnScreen(bounds, glyph, testCase.originX, testCase.originY) != testCase.isOnScreen {
+			t.Fatalf("glyph at origin %v,%v: expected on screen %v", testCase.originX, testCase.originY, testCase.isOnScreen)
+		}
 	}
 }
