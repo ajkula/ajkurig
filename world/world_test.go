@@ -181,6 +181,27 @@ func TestWeatherStartsFadesAndEnds(t *testing.T) {
 	}
 }
 
+func TestRegeneratedGroundMatchesANewGround(t *testing.T) {
+	reused, fresh := newTestGround(3), newTestGround(11)
+	reused.PaintCircle(32, 32, 6, testFire)
+	reused.SpreadMultiplier = 2.5
+	for range 90 {
+		reused.Tick()
+	}
+	reused.Regenerate(11, func(column, row int, seed uint32) MaterialID { return testGrass })
+	for _, ground := range []*Ground{reused, fresh} {
+		ground.PaintCircle(20, 20, 3, testFire)
+		for tick := range 60 {
+			ground.Tick()
+			ground.RefreshPixels(uint32(tick))
+		}
+	}
+	isSame := slices.Equal(reused.cells, fresh.cells) && slices.Equal(reused.Pixels, fresh.Pixels) && reused.random == fresh.random
+	if !isSame || reused.SpreadMultiplier != 1 || len(reused.glowingCells) != len(fresh.glowingCells) {
+		t.Fatal("a regenerated ground does not behave like a new one")
+	}
+}
+
 func TestWholeSpreadDrawsOnlyItsAttempts(t *testing.T) {
 	spreading, reference := newTestGround(3), newTestGround(3)
 	spreading.PaintCircle(32, 32, 2, testFire)

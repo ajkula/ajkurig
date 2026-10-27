@@ -119,6 +119,8 @@ func Rule(stimulus StimulusID, from, into MaterialID, chancePer1024 uint32) Mate
 func (g *Ground) Regenerate(seed uint32, generate func(column, row int, seed uint32) MaterialID) {
 	g.random = rng.New(seed)
 	g.tick = 0
+	g.SpreadMultiplier = 1
+	g.forgetPendingCells()
 	for index := range g.cells {
 		g.setCell(index, generate(index%g.Columns, index/g.Columns, seed))
 	}
@@ -245,6 +247,12 @@ func (g *Ground) refreshGlowingCell(index int, clock uint32) bool {
 		g.writePixel(index, material, clock)
 	}
 	return isStillGlowing
+}
+
+func (g *Ground) forgetPendingCells() {
+	clear(g.isPending)
+	clear(g.isListedGlowing)
+	g.pendingCells, g.glowingCells = g.pendingCells[:0], g.glowingCells[:0]
 }
 
 func (g *Ground) markChanged(index int, material MaterialID) {
