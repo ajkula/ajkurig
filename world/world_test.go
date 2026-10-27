@@ -1,8 +1,10 @@
 package world
 
 import (
+	"slices"
 	"testing"
 
+	"github.com/ajkula/ajkurig/mathx"
 	"github.com/ajkula/ajkurig/rng"
 )
 
@@ -179,6 +181,39 @@ func TestWeatherStartsFadesAndEnds(t *testing.T) {
 	}
 }
 
+func TestWholeSpreadDrawsOnlyItsAttempts(t *testing.T) {
+	spreading, reference := newTestGround(3), newTestGround(3)
+	spreading.PaintCircle(32, 32, 2, testFire)
+	reference.PaintCircle(32, 32, 2, testFire)
+	for range 200 {
+		spreading.Tick()
+		singleAttemptTick(reference)
+	}
+	if !slices.Equal(spreading.cells, reference.cells) || spreading.random != reference.random {
+		t.Fatal("a whole spread multiplier drew extra random numbers")
+	}
+}
+
+func TestWeatherUpdateIsAdvanceThenStrike(t *testing.T) {
+	definitions := []WeatherDefinition{{Key: "clear"}, {Key: "storm", StrikeChancePerSecond: 30}}
+	timing := WeatherTiming{CalmMinimumSeconds: 1, CalmMaximumSeconds: 1, ActiveSeconds: 10, FadeSeconds: 2, FlashSeconds: 0.3}
+	combinedRandom, splitRandom := rng.New(8), rng.New(8)
+	combined, split := NewWeather(definitions, timing, &combinedRandom), NewWeather(definitions, timing, &splitRandom)
+	strikes := 0
+	for range 60 * 15 {
+		events := combined.Update(1.0/60, &combinedRandom)
+		splitEvents := split.Advance(1.0/60, &splitRandom)
+		splitEvents.Strike = split.RollStrike(1.0/60, &splitRandom)
+		strikes += mathx.BoolToIndex(events.Strike)
+		if events != splitEvents || combined.FlashSeconds != split.FlashSeconds {
+			t.Fatalf("update %+v, advance then strike %+v", events, splitEvents)
+		}
+	}
+	if strikes == 0 {
+		t.Fatal("the storm never struck")
+	}
+}
+
 func BenchmarkGroundTick(b *testing.B) {
 	ground := NewGround(GroundSettings{
 		Materials: testMaterials, Rules: testRules, StimulusCount: int(testStimulusEnd),
@@ -226,6 +261,21 @@ func fullScanTick(ground *Ground) {
 func fullRefreshPixels(ground *Ground, clock uint32) {
 	for index, material := range ground.cells {
 		ground.writePixel(index, material, clock)
+	}
+}
+
+func singleAttemptTick(ground *Ground) {
+	ground.tick++
+	for index, material := range ground.cells {
+		if !ground.isActive[material] {
+			continue
+		}
+		emitted := ground.materials[material].Emits
+		if emitted != StimulusNone && ground.bornOnTick[index] != ground.tick {
+			offset := cardinalOffsets[ground.random.Next()&3]
+			ground.stimulateCellIf(index%ground.Columns+offset[0], index/ground.Columns+offset[1], emitted, true)
+		}
+		ground.ageCell(index, material)
 	}
 }
 

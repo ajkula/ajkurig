@@ -118,6 +118,12 @@ func (w *Weather) Start(kind WeatherID) {
 }
 
 func (w *Weather) Update(deltaSeconds float32, random *rng.Random) WeatherEvents {
+	events := w.Advance(deltaSeconds, random)
+	events.Strike = w.RollStrike(deltaSeconds, random)
+	return events
+}
+
+func (w *Weather) Advance(deltaSeconds float32, random *rng.Random) WeatherEvents {
 	events := WeatherEvents{}
 	w.FlashSeconds = max(0, w.FlashSeconds-deltaSeconds)
 	w.CalmSeconds -= deltaSeconds * mathx.BoolToFloat(w.Kind == WeatherClear)
@@ -132,9 +138,13 @@ func (w *Weather) Update(deltaSeconds float32, random *rng.Random) WeatherEvents
 		w.Reset(random)
 		events.Ended = true
 	}
-	events.Strike = random.Chance(w.Definition().StrikeChancePerSecond * deltaSeconds * w.Intensity())
-	w.FlashSeconds = max(w.FlashSeconds, w.Timing.FlashSeconds*mathx.BoolToFloat(events.Strike))
 	return events
+}
+
+func (w *Weather) RollStrike(deltaSeconds float32, random *rng.Random) bool {
+	isStriking := random.Chance(w.Definition().StrikeChancePerSecond * deltaSeconds * w.Intensity())
+	w.FlashSeconds = max(w.FlashSeconds, w.Timing.FlashSeconds*mathx.BoolToFloat(isStriking))
+	return isStriking
 }
 
 func (w *Weather) StimulateGround(ground *Ground, focusX, focusY float32, random *rng.Random) {

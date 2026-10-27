@@ -309,7 +309,8 @@ func (g *Ground) spread(index int, material MaterialID) {
 	if emitted == StimulusNone || g.bornOnTick[index] == g.tick {
 		return
 	}
-	attempts := int(g.SpreadMultiplier) + mathx.BoolToIndex(g.random.Float() < g.SpreadMultiplier-mathx.Floor(g.SpreadMultiplier))
+	fraction := g.SpreadMultiplier - mathx.Floor(g.SpreadMultiplier)
+	attempts := int(g.SpreadMultiplier) + mathx.BoolToIndex(fraction > 0 && g.random.Float() < fraction)
 	for range attempts {
 		offset := cardinalOffsets[g.random.Next()&3]
 		g.stimulateCellIf(index%g.Columns+offset[0], index/g.Columns+offset[1], emitted, true)
