@@ -43,6 +43,7 @@ Les modules tournent dans l'ordre de montage ; `Enable`, `Unmount` et `Find` les
 - **Écrans** : intro GREG's, menu sur démo d'attraction et classement, options, graphismes, audio, playlist, commandes (clavier, souris, manette, deux sticks), langue, pause, montée de niveau, initiales, game over.
 - **Progression** : courbe d'XP, cartes de bonus ; l'affichage est remplaçable.
 - **Bulles de dialogue** : texte qui défile sur un fond léger, avec voix, largeur et opacité réglables.
+- **Sonde GPU** : `probe` dessine une scène figée de plusieurs façons et donne le coût de chaque image, puis compare les pixels de deux rendus.
 - **Release** : zips Windows, `.app` macOS universel, Linux par Docker, archives complètes.
 
 ## Mesuré (i5-6200U)
@@ -53,5 +54,6 @@ Les modules tournent dans l'ordre de montage ; `Enable`, `Unmount` et `Find` les
 | Tick du sol, toutes les 6 frames | 969 µs | 137 µs |
 | Surcoût des chronos, 20 modules × 2 phases | 12,1 µs | 3,7 µs |
 | Exemple, 10 000 disques, un tick | 28 ms | 3,3 ms |
+| Démo du menu de Hordefall, menu par-dessus le monde | 53,5 ms | 13,7 ms |
 
 Chaque optimisation est vérifiée par un test qui compare octet par octet avec l'ancien algorithme.

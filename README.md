@@ -53,6 +53,7 @@ Modules run in mount order. `Enable(name, false)` pauses one, `Unmount(name)` re
 | `ui` | Theme, text with CJK and Cyrillic fallbacks, pixel font, menus with sliders and drums, cards, bars, banners, dialogue bubbles |
 | `draw` | Render scale, camera, sprite batches (solid, glow, rings), primitives |
 | `postfx` | Bloom and CRT shaders |
+| `probe` | GPU frame cost of drawing variants on a frozen scene, pixel comparison |
 | `fx` | Particles, rings, bolts, smoke, popups, screen shake, skid marks, weather rendering |
 | `world` | Ground materials and their reactions, statuses and reactions between elements, weather |
 | `procanim` | Servo, springs, two-bone IK, leg gait |
@@ -121,8 +122,23 @@ On an i5-6200U:
 | Ground tick, 65 536 cells, every 6 frames | 969 us | 137 us |
 | Rack timing overhead, 20 modules x 2 phases | 12.1 us | 3.7 us |
 | Example, 10 000 discs, one tick | 28 ms | 3.3 ms |
+| Hordefall attract demo, main menu over the world | 53.5 ms | 13.7 ms |
 
 Each optimisation is checked against the original algorithm by a test that compares the results byte for byte. Run `go test ./... -run x -bench .` to measure again.
+
+CPU benchmarks miss what the graphics card pays. `probe.Run` freezes a scene and draws it several ways, each for 240 frames without vsync, and reports the cost of a full frame for each:
+
+```go
+options := probe.ForApp(app, 120)
+results, err := probe.Run(options, []probe.Phase{
+	{Name: "menu", Draw: app.Draw},
+	{Name: "play", Enter: func() { app.Switch(shell.ScreenPlay) }, Draw: app.Draw},
+	{Name: "world only", Draw: func(screen *ebiten.Image) { app.DrawWorld(frame, screen) }},
+})
+fmt.Print(probe.Format(results))
+```
+
+The app runs normally for the warmup frames, then stops updating. Phases that add one element at a time show which one costs. `Options.OnFinish` runs inside the game loop, where `probe.Compare` can read pixels back, to check that a faster way of drawing looks the same.
 
 ## Colours
 

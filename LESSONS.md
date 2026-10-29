@@ -12,6 +12,8 @@ What Hordefall and ajkurig taught, so the next game does not fail the same way.
 - Track what changed instead of scanning everything: the ground refresh keeps a list of changed cells and of glowing cells (1 ms to 53 us per frame).
 - Skip inert work early: ground cells that neither emit nor expire are not visited.
 - `time.Now()` costs about 300 ns on Windows: time one frame in eight, not every call.
+- Never set `AntiAlias` on `DrawTriangles`: each call renders through a doubled offscreen buffer, about 5 ms on an HD 520 at 1080p. Two menu arrows (eight triangles) held every Hordefall demo at 19 FPS. Fill shapes with `vector` paths (anti-aliased for free) or a sprite batch.
+- A CPU profile dominated by `runtime.cgocall` under `Present` means the graphics card is the bottleneck: measure frames with `probe` instead of guessing.
 - Reuse buffers and maps every frame (shader uniforms, candidate lists); no allocation in hot loops.
 
 ## Correctness
