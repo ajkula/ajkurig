@@ -30,6 +30,7 @@ type RunStatus struct {
 	Stats           map[string]int
 	Summary         string
 	Details         string
+	KilledBy        []DamageCause
 }
 
 type Game interface {

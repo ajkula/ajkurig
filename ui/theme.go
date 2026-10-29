@@ -14,6 +14,8 @@ type Theme struct {
 	Experience     colorx.RGB
 	Ranking        colorx.RGB
 	SelectedCard   colorx.RGB
+	KilledBy       colorx.RGB
+	KilledByRim    colorx.RGB
 	MenuDim        float32
 	TitleTop       float32
 	HintTop        float32
@@ -42,6 +44,8 @@ var DefaultTheme = Theme{
 	Experience:     colorx.ElectricBlue,
 	Ranking:        colorx.Frostbite,
 	SelectedCard:   colorx.SteelPink,
+	KilledBy:       colorx.PaleSilver,
+	KilledByRim:    colorx.BloodRed,
 	MenuDim:        0.42,
 	TitleTop:       70,
 	HintTop:        660,

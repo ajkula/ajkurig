@@ -6,7 +6,6 @@ import (
 	"github.com/hajimehoshi/ebiten/v2"
 	"github.com/hajimehoshi/ebiten/v2/text/v2"
 
-	"github.com/ajkula/ajkurig/colorx"
 	"github.com/ajkula/ajkurig/draw"
 )
 
@@ -15,7 +14,7 @@ import (
 type textKey struct {
 	Message   string
 	Kind      FaceKind
-	Tint      colorx.RGB
+	Ink       textInk
 	Align     text.Align
 	SubpixelX uint8
 	SubpixelY uint8
@@ -46,10 +45,10 @@ func (t *Text) CachedCount() int {
 
 // ===== Internal =====
 
-func (t *Text) drawCached(screen *ebiten.Image, message string, kind FaceKind, scaledX, scaledY float64, tint colorx.RGB, align text.Align) {
+func (t *Text) drawCached(screen *ebiten.Image, message string, kind FaceKind, scaledX, scaledY float64, ink textInk, align text.Align) {
 	t.clearCacheIfRescaled()
 	originX, originY := math.Floor(scaledX), math.Floor(scaledY)
-	key := textKey{Message: message, Kind: kind, Tint: tint, Align: align, SubpixelX: subpixelStep(scaledX - originX), SubpixelY: subpixelStep(scaledY - originY)}
+	key := textKey{Message: message, Kind: kind, Ink: ink, Align: align, SubpixelX: subpixelStep(scaledX - originX), SubpixelY: subpixelStep(scaledY - originY)}
 	entry, isCached := t.cache[key]
 	if !isCached {
 		entry = t.renderCached(key)
@@ -71,7 +70,7 @@ func (t *Text) renderCached(key textKey) *cachedText {
 	image := ebiten.NewImage(int(math.Ceil(width)+2*padding)+1, int(math.Ceil(height)+2*padding)+1)
 	localX := padding + anchor + float64(key.SubpixelX)/textSubpixelSteps
 	localY := padding + float64(key.SubpixelY)/textSubpixelSteps
-	t.drawDirect(image, key.Message, key.Kind, localX, localY, key.Tint, 1, key.Align)
+	t.drawDirect(image, key.Message, key.Kind, localX, localY, key.Ink, 1, key.Align)
 	entry := &cachedText{Image: image, OffsetX: -padding - anchor, OffsetY: -padding}
 	t.cache[key] = entry
 	return entry

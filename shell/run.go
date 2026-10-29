@@ -163,6 +163,7 @@ func (n *NameEntryScreen) Draw(frame *rig.Frame, screen *ebiten.Image) {
 	for index, letter := range n.Entry.Letters {
 		n.drawInitial(screen, kit, index, string(letter))
 	}
+	shell.drawKilledBy(screen)
 	kit.Hints(screen, app.Hint("hint.name_entry"))
 }
 
@@ -206,6 +207,7 @@ func (g *GameOverScreen) Draw(frame *rig.Frame, screen *ebiten.Image) {
 	kit.Text.Draw(screen, shell.RunStatus.Summary, ui.FaceBold, kit.Width/2, 295, theme.Text, 1, text.AlignCenter)
 	kit.Text.Draw(screen, mathx.Pick(isRanked, shell.RunStatus.Details, ""), ui.FaceRegular, kit.Width/2, gameOverDetailsTop, theme.Text, 1, text.AlignCenter)
 	shell.drawRankedLine(frame, screen, gameOverRankedTop)
+	shell.drawKilledBy(screen)
 	kit.Message(screen, app.Message)
 	choices := i18n.F("gameover.choices", app.Input.ButtonLabel(input.ActionStart), app.Input.ButtonLabel(input.ActionSelect))
 	kit.Text.Draw(screen, choices, ui.FaceBold, kit.Width/2, 600, theme.Accent, 1, text.AlignCenter)

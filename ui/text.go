@@ -35,6 +35,12 @@ type textStyle struct {
 	ShadowAlpha float32
 }
 
+type textInk struct {
+	Tint       colorx.RGB
+	Outline    colorx.RGB
+	IsOutlined bool
+}
+
 type wrapToken struct {
 	Text     string
 	IsSpaced bool
@@ -143,15 +149,11 @@ func (t *Text) Size(kind FaceKind) float32 {
 }
 
 func (t *Text) Draw(screen *ebiten.Image, message string, kind FaceKind, x, y float32, tint colorx.RGB, alpha float32, align text.Align) {
-	if message == "" || alpha <= 0 {
-		return
-	}
-	scaledX, scaledY := snapToSubpixel(x*draw.Scale), snapToSubpixel(y*draw.Scale)
-	if alpha < 1 {
-		t.drawDirect(screen, message, kind, scaledX, scaledY, tint, alpha, align)
-		return
-	}
-	t.drawCached(screen, message, kind, scaledX, scaledY, tint, align)
+	t.drawInk(screen, message, kind, x, y, textInk{Tint: tint}, alpha, align)
+}
+
+func (t *Text) DrawOutlined(screen *ebiten.Image, message string, kind FaceKind, x, y float32, tint, outline colorx.RGB, align text.Align) {
+	t.drawInk(screen, message, kind, x, y, textInk{Tint: tint, Outline: outline, IsOutlined: true}, 1, align)
 }
 
 func (t *Text) Width(message string, kind FaceKind) float32 {
@@ -182,17 +184,29 @@ func (t *Text) Wrap(message string, kind FaceKind, maximumWidth float32) string 
 
 // ===== Internal =====
 
-func (t *Text) drawDirect(screen *ebiten.Image, message string, kind FaceKind, scaledX, scaledY float64, tint colorx.RGB, alpha float32, align text.Align) {
+func (t *Text) drawInk(screen *ebiten.Image, message string, kind FaceKind, x, y float32, ink textInk, alpha float32, align text.Align) {
+	if message == "" || alpha <= 0 {
+		return
+	}
+	scaledX, scaledY := snapToSubpixel(x*draw.Scale), snapToSubpixel(y*draw.Scale)
+	if alpha < 1 {
+		t.drawDirect(screen, message, kind, scaledX, scaledY, ink, alpha, align)
+		return
+	}
+	t.drawCached(screen, message, kind, scaledX, scaledY, ink, align)
+}
+
+func (t *Text) drawDirect(screen *ebiten.Image, message string, kind FaceKind, scaledX, scaledY float64, ink textInk, alpha float32, align text.Align) {
 	face := t.faces[kind]
-	isSmall := kind == FaceSmall
-	style := textStyles[mathx.BoolToIndex(isSmall)]
+	isShadowed := kind == FaceSmall && !ink.IsOutlined
+	style := textStyles[mathx.BoolToIndex(isShadowed)]
 	scaledFace := t.scaledFace(face)
 	layout := &t.layout
 	layout.PrimaryAlign = align
 	layout.LineSpacing = face.Size * float64(draw.Scale) * lineSpacingRatio
 	t.glyphs = text.AppendGlyphs(t.glyphs[:0], message, scaledFace, layout)
-	t.drawGlyphPass(screen, scaledX, scaledY, style.Shadows, colorx.NRGBA(t.Theme.Outline, alpha*style.ShadowAlpha))
-	t.drawGlyphPass(screen, scaledX, scaledY, style.Strokes, colorx.NRGBA(mathx.Pick(isSmall, tint, t.Theme.Text), alpha))
+	t.drawGlyphPass(screen, scaledX, scaledY, style.Shadows, colorx.NRGBA(mathx.Pick(ink.IsOutlined, t.Theme.Outline, ink.Outline), alpha*style.ShadowAlpha))
+	t.drawGlyphPass(screen, scaledX, scaledY, style.Strokes, colorx.NRGBA(mathx.Pick(isShadowed, ink.Tint, t.Theme.Text), alpha))
 	clear(t.glyphs)
 }
 
