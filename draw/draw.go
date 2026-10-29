@@ -76,14 +76,15 @@ func FillRoundedRect(screen *ebiten.Image, x, y, width, height, radius float32, 
 }
 
 func FillTriangle(screen *ebiten.Image, points [3][2]float32, tint colorx.RGB, alpha float32) {
-	vertices := make([]ebiten.Vertex, 0, 3)
-	for _, point := range points {
-		vertices = append(vertices, ebiten.Vertex{
-			DstX: point[0] * Scale, DstY: point[1] * Scale, SrcX: 1.5, SrcY: 1.5,
-			ColorR: tint[0] * alpha, ColorG: tint[1] * alpha, ColorB: tint[2] * alpha, ColorA: alpha,
-		})
-	}
-	screen.DrawTriangles32(vertices, []uint32{0, 1, 2}, SolidPixel(), &ebiten.DrawTrianglesOptions{AntiAlias: true})
+	var path vector.Path
+	path.MoveTo(points[0][0]*Scale, points[0][1]*Scale)
+	path.LineTo(points[1][0]*Scale, points[1][1]*Scale)
+	path.LineTo(points[2][0]*Scale, points[2][1]*Scale)
+	path.Close()
+	shaded := colorx.Scale(tint, alpha*alpha)
+	options := &vector.DrawPathOptions{AntiAlias: true}
+	options.ColorScale.Scale(shaded[0], shaded[1], shaded[2], alpha)
+	vector.FillPath(screen, &path, &vector.FillOptions{}, options)
 }
 
 func StrokeLine(screen *ebiten.Image, fromX, fromY, toX, toY, width float32, tint color.Color) {
