@@ -142,6 +142,14 @@ func (e *Effects) SpawnSparks(x, y float32, count int, color colorx.RGB, speed f
 	}
 }
 
+func (e *Effects) SpawnSparksToward(x, y float32, count int, angle, spread float32, color colorx.RGB, speed float32) {
+	for range count {
+		heading := angle + e.random.Between(-spread, spread)
+		velocity := e.random.Between(0.3, 1) * speed
+		e.spawnParticle(x, y, mathx.Cos(heading)*velocity, mathx.Sin(heading)*velocity, e.random.Between(0.25, 0.6), e.random.Between(2, 4), color)
+	}
+}
+
 func (e *Effects) SpawnRain(x, y, radius float32, color colorx.RGB) {
 	for range 40 {
 		angle := e.random.Angle()
