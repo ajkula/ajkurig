@@ -205,6 +205,20 @@ func (g *fakeGame) Update(frame *rig.Frame) {
 
 // ===== Internal =====
 
+func TestGameplayMenuListsTheOptionsOfTheGame(t *testing.T) {
+	_, _, shell := newTestApp(t)
+	isActivated := false
+	shell.Options.GameplayOptions = []ui.Option{{Label: func() string { return "game option" }, Activate: func() { isActivated = true }}}
+	options := newGameplayMenu(shell).Menu.Options
+	if options[1].Label() != "game option" {
+		t.Fatalf("second gameplay option is %q, want the option of the game", options[1].Label())
+	}
+	options[1].Activate()
+	if !isActivated {
+		t.Fatalf("the option of the game did not run")
+	}
+}
+
 func newTestApp(t *testing.T) (*rig.App, *fakeGame, *Shell) {
 	return newTestAppIn(t, t.TempDir())
 }

@@ -266,11 +266,12 @@ func chooseLanguage(shell *Shell, code string) {
 
 func newGameplayMenu(shell *Shell) *MenuScreen {
 	app := shell.App
-	return submenu(shell, "title.gameplay", ScreenOptions, []string{"hint.menu_back"}, []ui.Option{
-		{Label: Label("gameplay.language"), Drum: languageDrum(shell)},
-		{Label: Label("gameplay.high_scores"), Activate: func() { app.Switch(ScreenHighScores) }},
-		{Label: Label("gameplay.reset_scores"), Activate: func() { app.Switch(ScreenResetScores) }},
-	})
+	options := []ui.Option{{Label: Label("gameplay.language"), Drum: languageDrum(shell)}}
+	options = append(options, shell.Options.GameplayOptions...)
+	return submenu(shell, "title.gameplay", ScreenOptions, []string{"hint.menu_back"}, append(options,
+		ui.Option{Label: Label("gameplay.high_scores"), Activate: func() { app.Switch(ScreenHighScores) }},
+		ui.Option{Label: Label("gameplay.reset_scores"), Activate: func() { app.Switch(ScreenResetScores) }},
+	))
 }
 
 func newResetScoresMenu(shell *Shell) *MenuScreen {

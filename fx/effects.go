@@ -194,6 +194,18 @@ func (e *Effects) AddDust(x, y, size float32) {
 	})
 }
 
+func (e *Effects) AddCloud(x, y, size, opacity float32, color colorx.RGB) {
+	isThinnedOut := e.random.Float() >= e.Density
+	if isThinnedOut || len(e.Smokes) >= maximumSmokes {
+		return
+	}
+	life := smokeLifeSeconds * e.random.Between(0.7, 1.3)
+	e.Smokes = append(e.Smokes, Smoke{
+		X: x, Y: y, VelocityX: e.random.Between(-smokeDriftSpeed, smokeDriftSpeed), VelocityY: -smokeRiseSpeed * e.random.Between(0.7, 1.3),
+		Size: size * e.random.Between(0.8, 1.2), Life: life, MaxLife: life, Color: color, Opacity: opacity,
+	})
+}
+
 func (e *Effects) AddRing(x, y, radius float32, color colorx.RGB) {
 	if radius <= 0 || len(e.Rings) >= maximumRings {
 		return

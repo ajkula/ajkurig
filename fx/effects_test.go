@@ -9,6 +9,16 @@ import (
 
 // ===== Tests =====
 
+func TestCloudKeepsItsColorAndOpacity(t *testing.T) {
+	effects := NewEffects(1)
+	effects.Density = 1
+	color := colorx.RGB{0.9, 0.95, 1}
+	effects.AddCloud(10, 20, 24, 0.15, color)
+	if len(effects.Smokes) != 1 || effects.Smokes[0].Color != color || effects.Smokes[0].Opacity != 0.15 {
+		t.Fatalf("cloud %+v", effects.Smokes)
+	}
+}
+
 func TestSparksTowardAnAngleStayInsideTheSpread(t *testing.T) {
 	effects := NewEffects(7)
 	angle, spread := float32(1.2), float32(0.4)

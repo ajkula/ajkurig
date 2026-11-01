@@ -64,6 +64,7 @@ type Options struct {
 	AttractArt      func(screen *ebiten.Image, progress, clock float32)
 	HighScoreLine   func(entry scores.Entry) string
 	ControlsHint    string
+	GameplayOptions []ui.Option
 }
 
 type Shell struct {
