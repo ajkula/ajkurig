@@ -38,10 +38,10 @@ const (
 	killedByTitle              = "KILLED BY"
 	killedByRight              = 60
 	killedByWidth              = 380
-	killedByTop                = 430
+	killedByTop                = 458
 	killedByRowHeight          = 28
 	killedByHitsColumn         = 110
-	killedByMaximumRows        = 5
+	killedByMaximumRows        = 4
 	killedByTitleIndentGlyphs  = 2
 	continuousGapTicks         = 2
 )
