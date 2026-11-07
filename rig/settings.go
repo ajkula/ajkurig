@@ -32,7 +32,7 @@ type Settings struct {
 	MusicVolumeStep   int               `json:"musicVolume"`
 	EffectsVolumeStep int               `json:"effectsVolume"`
 	Initials          string            `json:"initials"`
-	IsBenchmarkHidden bool              `json:"benchmarkHidden"`
+	IsBenchmarkShown  bool              `json:"benchmarkShown"`
 	Language          string            `json:"language"`
 	Custom            map[string]string `json:"custom"`
 }

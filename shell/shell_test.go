@@ -264,17 +264,17 @@ func TestBoardColumnsFitTheLongestRow(t *testing.T) {
 	}
 }
 
-func TestSelectInPauseTogglesTheBenchShownDuringTheRun(t *testing.T) {
+func TestBenchIsHiddenUntilSelectInPauseShowsIt(t *testing.T) {
 	app, _, shell := newTestApp(t)
 	shell.StartRun()
 	stepFor(app, 0.5, 0)
 	press(app, input.ActionPause)
 	press(app, input.ActionSelect)
-	if app.CurrentScreen() != ScreenPause || !app.Settings.IsBenchmarkHidden {
-		t.Fatalf("select in pause: screen %q, hidden %v", app.CurrentScreen(), app.Settings.IsBenchmarkHidden)
+	if app.CurrentScreen() != ScreenPause || !app.Settings.IsBenchmarkShown {
+		t.Fatalf("select in pause: screen %q, shown %v", app.CurrentScreen(), app.Settings.IsBenchmarkShown)
 	}
 	press(app, input.ActionSelect)
-	if app.Settings.IsBenchmarkHidden {
-		t.Fatal("select in pause did not show the bench again")
+	if app.Settings.IsBenchmarkShown {
+		t.Fatal("select in pause did not hide the bench again")
 	}
 }
