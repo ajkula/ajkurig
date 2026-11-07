@@ -171,6 +171,22 @@ func (g *Ground) PaintCircle(centerColumn, centerRow, radiusCells int, material 
 	}
 }
 
+func (g *Ground) PaintCell(column, row int, material MaterialID) {
+	g.paintCellIf(column, row, material, true)
+}
+
+func (g *Ground) Regions(isMember []bool) [][]int32 {
+	isVisited := make([]bool, len(g.cells))
+	regions := make([][]int32, 0, 16)
+	for index, material := range g.cells {
+		if isVisited[index] || !isMember[material] {
+			continue
+		}
+		regions = append(regions, g.floodRegion(index, isMember, isVisited))
+	}
+	return regions
+}
+
 func (g *Ground) CountMaterial(material MaterialID) int {
 	count := 0
 	for _, cell := range g.cells {
@@ -334,6 +350,28 @@ func (g *Ground) ageCell(index int, material MaterialID) {
 		return
 	}
 	g.lifetimes[index]--
+}
+
+func (g *Ground) floodRegion(start int, isMember, isVisited []bool) []int32 {
+	isVisited[start] = true
+	region := []int32{int32(start)}
+	for cursor := 0; cursor < len(region); cursor++ {
+		column, row := int(region[cursor])%g.Columns, int(region[cursor])/g.Columns
+		for _, offset := range cardinalOffsets {
+			region = g.appendRegionCell(region, column+offset[0], row+offset[1], isMember, isVisited)
+		}
+	}
+	return region
+}
+
+func (g *Ground) appendRegionCell(region []int32, column, row int, isMember, isVisited []bool) []int32 {
+	if !g.isInside(column, row) {
+		return region
+	}
+	index := row*g.Columns + column
+	isNew := !isVisited[index] && isMember[g.cells[index]]
+	isVisited[index] = isVisited[index] || isNew
+	return mathx.AppendIf(region, int32(index), isNew)
 }
 
 func latticeValue(seed uint32, column, row int) float32 {

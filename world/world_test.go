@@ -80,6 +80,22 @@ func TestFireSpreadsBurnsToAshAndGrassGrowsBack(t *testing.T) {
 	}
 }
 
+func TestRegionsGroupOnlyTouchingMemberCells(t *testing.T) {
+	ground := newTestGround(1)
+	ground.PaintCircle(10, 10, 2, testWater)
+	ground.PaintCircle(40, 40, 3, testIce)
+	ground.PaintCell(13, 10, testWater)
+	isWet := make([]bool, len(testMaterials))
+	isWet[testWater], isWet[testIce] = true, true
+	regions := ground.Regions(isWet)
+	if len(regions) != 2 {
+		t.Fatalf("%d regions, want 2", len(regions))
+	}
+	if len(regions[0]) != 14 || len(regions[1]) != 29 {
+		t.Fatalf("region sizes %d and %d, want 14 and 29", len(regions[0]), len(regions[1]))
+	}
+}
+
 func TestHeatMakesFireSpreadFurther(t *testing.T) {
 	normal, hot := 0, 0
 	for seed := range uint32(8) {
