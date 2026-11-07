@@ -59,6 +59,7 @@ func packageMacOS(release *Release, archivePath string) error {
 	return writeTarGz(archivePath, []ArchiveEntry{
 		{Name: bundle + "MacOS/" + config.Name, Mode: 0o755, SourcePath: universal},
 		{Name: bundle + "Info.plist", Mode: 0o644, Content: fmt.Appendf(nil, infoPlist, config.Name, config.BundleID, release.Version, config.Category)},
+		licenseEntry(release, ""),
 	})
 }
 

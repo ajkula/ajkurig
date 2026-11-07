@@ -37,6 +37,7 @@ type Release struct {
 	SourceDir  string
 	MountRoot  string
 	ModuleDirs []string
+	Licenses   []byte
 }
 
 type moduleEdit struct {
@@ -109,6 +110,9 @@ func run() error {
 	}
 	moduleDirs := localModuleDirs(sourceDir)
 	release := &Release{Config: config, Version: gitVersion(), WorkDir: workDir, SourceDir: sourceDir, MountRoot: mountRoot(moduleDirs), ModuleDirs: moduleDirs}
+	if release.Licenses, err = collectLicenses(release); err != nil {
+		return err
+	}
 	failures := 0
 	for _, target := range selectTargets(*requested) {
 		failures += buildTarget(release, target)
@@ -296,7 +300,7 @@ func packageWindows(goarch string) func(release *Release, archivePath string) er
 			return err
 		}
 		name := release.Config.Name
-		return writeZip(archivePath, []ArchiveEntry{{Name: name + "/" + name + ".exe", Mode: 0o755, SourcePath: binary}})
+		return writeZip(archivePath, []ArchiveEntry{{Name: name + "/" + name + ".exe", Mode: 0o755, SourcePath: binary}, licenseEntry(release, name+"/")})
 	}
 }
 
@@ -306,7 +310,7 @@ func packageNative(goos string) func(release *Release, archivePath string) error
 		if err := compile(release, goos, runtime.GOARCH, true, stripFlags, binary); err != nil {
 			return err
 		}
-		return writeTarGz(archivePath, []ArchiveEntry{{Name: release.Config.Name + "/" + release.Config.Binary, Mode: 0o755, SourcePath: binary}})
+		return writeTarGz(archivePath, []ArchiveEntry{{Name: release.Config.Name + "/" + release.Config.Binary, Mode: 0o755, SourcePath: binary}, licenseEntry(release, release.Config.Name+"/")})
 	}
 }
 
@@ -318,7 +322,7 @@ func packageLinux(release *Release, archivePath string) error {
 	if err := compileLinuxInDocker(release, binary); err != nil {
 		return err
 	}
-	return writeTarGz(archivePath, []ArchiveEntry{{Name: release.Config.Name + "/" + release.Config.Binary, Mode: 0o755, SourcePath: binary}})
+	return writeTarGz(archivePath, []ArchiveEntry{{Name: release.Config.Name + "/" + release.Config.Binary, Mode: 0o755, SourcePath: binary}, licenseEntry(release, release.Config.Name+"/")})
 }
 
 func compileLinuxInDocker(release *Release, output string) error {

@@ -48,6 +48,26 @@ func TestLoneModuleIsMountedAlone(t *testing.T) {
 	}
 }
 
+func TestLicenseFilesIncludeFontLicensesButSkipVendoredCode(t *testing.T) {
+	root := t.TempDir()
+	writeFiles(t, map[string]string{
+		filepath.Join(root, "LICENSE"):                "BSD",
+		filepath.Join(root, "ui", "fonts", "OFL.txt"): "OFL",
+		filepath.Join(root, "vendor", "x", "LICENSE"): "vendored",
+		filepath.Join(root, "README.md"):              "readme",
+		filepath.Join(root, "licenses.go"):            "package main",
+		filepath.Join(root, "examples", "LICENSE"):    "example only",
+	})
+	paths, err := licenseFiles(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := []string{filepath.Join(root, "LICENSE"), filepath.Join(root, "ui", "fonts", "OFL.txt")}
+	if !slices.Equal(paths, want) {
+		t.Fatalf("license files %v, want %v", paths, want)
+	}
+}
+
 // ===== Internal =====
 
 func writeFiles(t *testing.T, files map[string]string) {
