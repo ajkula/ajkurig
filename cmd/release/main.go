@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"path"
 	"path/filepath"
 	"runtime"
 	"slices"
@@ -30,11 +31,12 @@ type Target struct {
 }
 
 type Release struct {
-	Config    Config
-	Version   string
-	WorkDir   string
-	SourceDir string
-	MountRoot string
+	Config     Config
+	Version    string
+	WorkDir    string
+	SourceDir  string
+	MountRoot  string
+	ModuleDirs []string
 }
 
 type moduleEdit struct {
@@ -45,17 +47,24 @@ type moduleEdit struct {
 	}
 }
 
+type workspaceEdit struct {
+	Use []struct {
+		DiskPath string
+	}
+}
+
 // ===== Constants =====
 
 const (
-	distDirectory    = "dist"
-	configFileName   = "release.json"
-	allTargets       = "all"
-	stripFlags       = "-s -w"
-	windowsGUIFlag   = " -H windowsgui"
-	dockerGoImage    = "golang:1.26"
-	linuxPackages    = "libgl1-mesa-dev xorg-dev libasound2-dev"
-	availableMessage = ""
+	distDirectory       = "dist"
+	configFileName      = "release.json"
+	allTargets          = "all"
+	stripFlags          = "-s -w"
+	windowsGUIFlag      = " -H windowsgui"
+	dockerGoImage       = "golang:1.26"
+	linuxPackages       = "libgl1-mesa-dev xorg-dev libasound2-dev"
+	availableMessage    = ""
+	containerSourceRoot = "/src"
 )
 
 var targets = []Target{
@@ -98,7 +107,8 @@ func run() error {
 	if err := os.MkdirAll(distDirectory, 0o755); err != nil {
 		return err
 	}
-	release := &Release{Config: config, Version: gitVersion(), WorkDir: workDir, SourceDir: sourceDir, MountRoot: mountRoot(sourceDir)}
+	moduleDirs := localModuleDirs(sourceDir)
+	release := &Release{Config: config, Version: gitVersion(), WorkDir: workDir, SourceDir: sourceDir, MountRoot: mountRoot(moduleDirs), ModuleDirs: moduleDirs}
 	failures := 0
 	for _, target := range selectTargets(*requested) {
 		failures += buildTarget(release, target)
@@ -125,21 +135,57 @@ func loadConfig(path string) (Config, error) {
 	return config, nil
 }
 
-func mountRoot(sourceDir string) string {
-	output, err := exec.Command("go", "mod", "edit", "-json").Output()
-	if err != nil {
-		return sourceDir
-	}
-	var edit moduleEdit
-	if json.Unmarshal(output, &edit) != nil {
-		return sourceDir
-	}
-	root := sourceDir
-	for _, replace := range edit.Replace {
-		isLocal := strings.HasPrefix(replace.New.Path, ".") || filepath.IsAbs(replace.New.Path)
-		root = commonAncestor(root, localPath(sourceDir, replace.New.Path, isLocal))
+func localModuleDirs(sourceDir string) []string {
+	dirs := slices.Concat([]string{sourceDir}, replacedModulePaths(sourceDir), workspaceModulePaths(sourceDir))
+	slices.Sort(dirs)
+	return slices.Compact(dirs)
+}
+
+func mountRoot(moduleDirs []string) string {
+	root := moduleDirs[0]
+	for _, dir := range moduleDirs {
+		root = commonAncestor(root, dir)
 	}
 	return root
+}
+
+func replacedModulePaths(sourceDir string) []string {
+	var edit moduleEdit
+	if !readGoJSON(sourceDir, &edit, "mod", "edit", "-json") {
+		return nil
+	}
+	paths := make([]string, 0, len(edit.Replace))
+	for _, replace := range edit.Replace {
+		isLocal := strings.HasPrefix(replace.New.Path, ".") || filepath.IsAbs(replace.New.Path)
+		paths = append(paths, localPath(sourceDir, replace.New.Path, isLocal))
+	}
+	return paths
+}
+
+func workspaceModulePaths(sourceDir string) []string {
+	command := exec.Command("go", "env", "GOWORK")
+	command.Dir = sourceDir
+	output, err := command.Output()
+	workFile := strings.TrimSpace(string(output))
+	if err != nil || workFile == "" || workFile == "off" {
+		return nil
+	}
+	var edit workspaceEdit
+	if !readGoJSON(sourceDir, &edit, "work", "edit", "-json", workFile) {
+		return nil
+	}
+	paths := make([]string, 0, len(edit.Use))
+	for _, use := range edit.Use {
+		paths = append(paths, localPath(filepath.Dir(workFile), use.DiskPath, true))
+	}
+	return paths
+}
+
+func readGoJSON(directory string, target any, arguments ...string) bool {
+	command := exec.Command("go", arguments...)
+	command.Dir = directory
+	output, err := command.Output()
+	return err == nil && json.Unmarshal(output, target) == nil
 }
 
 func localPath(sourceDir, path string, isLocal bool) string {
@@ -276,17 +322,31 @@ func packageLinux(release *Release, archivePath string) error {
 }
 
 func compileLinuxInDocker(release *Release, output string) error {
-	relative, err := filepath.Rel(release.MountRoot, release.SourceDir)
+	workDir, err := containerPath(release.MountRoot, release.SourceDir)
 	if err != nil {
 		return err
 	}
-	workDir := "/src/" + filepath.ToSlash(relative)
+	arguments := []string{"run", "--rm", "--platform", "linux/amd64", "-e", "DEBIAN_FRONTEND=noninteractive"}
+	for _, dir := range release.ModuleDirs {
+		mounted, err := containerPath(release.MountRoot, dir)
+		if err != nil {
+			return err
+		}
+		arguments = append(arguments, "-v", filepath.ToSlash(dir)+":"+mounted)
+	}
 	script := fmt.Sprintf("apt-get update -qq >/dev/null && apt-get install -y -qq %s >/dev/null 2>&1 && go build -buildvcs=false -trimpath -ldflags '%s' -o /out/%s %s", linuxPackages, stripFlags, filepath.Base(output), release.Config.Package)
-	command := exec.Command("docker", "run", "--rm", "--platform", "linux/amd64", "-e", "DEBIAN_FRONTEND=noninteractive",
-		"-v", filepath.ToSlash(release.MountRoot)+":/src", "-v", filepath.ToSlash(filepath.Dir(output))+":/out",
-		"-w", workDir, dockerGoImage, "bash", "-c", script)
+	arguments = append(arguments, "-v", filepath.ToSlash(filepath.Dir(output))+":/out", "-w", workDir, dockerGoImage, "bash", "-c", script)
+	command := exec.Command("docker", arguments...)
 	command.Stdout, command.Stderr = os.Stdout, os.Stderr
 	return command.Run()
+}
+
+func containerPath(mountRoot, dir string) (string, error) {
+	relative, err := filepath.Rel(mountRoot, dir)
+	if err != nil {
+		return "", err
+	}
+	return path.Join(containerSourceRoot, filepath.ToSlash(relative)), nil
 }
 
 func appendIf[T any](items []T, item T, shouldAppend bool) []T {
