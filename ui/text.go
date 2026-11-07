@@ -67,6 +67,7 @@ const (
 	FaceSmall FaceKind = iota
 	FaceRegular
 	FaceBold
+	FaceHeading
 	FaceTitle
 	FaceMono
 	faceKindCount
@@ -130,6 +131,7 @@ func NewText(theme *Theme, files FontFiles) *Text {
 		FaceSmall:   {Source: bold, Size: theme.SmallSize},
 		FaceRegular: {Source: medium, Size: theme.RegularSize},
 		FaceBold:    {Source: bold, Size: theme.BoldSize},
+		FaceHeading: {Source: bold, Size: theme.HeadingSize},
 		FaceTitle:   {Source: bold, Size: theme.TitleSize},
 		FaceMono:    {Source: loadFaceSource(gomonobold.TTF, nil), Size: theme.MonoSize},
 	}

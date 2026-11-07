@@ -28,6 +28,7 @@ type Theme struct {
 	SmallSize      float64
 	RegularSize    float64
 	BoldSize       float64
+	HeadingSize    float64
 	TitleSize      float64
 	MonoSize       float64
 }
@@ -58,6 +59,7 @@ var DefaultTheme = Theme{
 	SmallSize:      16,
 	RegularSize:    20,
 	BoldSize:       24,
+	HeadingSize:    38.4,
 	TitleSize:      80,
 	MonoSize:       18,
 }

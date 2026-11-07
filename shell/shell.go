@@ -65,6 +65,7 @@ type Options struct {
 	HighScoreLine   func(entry scores.Entry) string
 	ControlsHint    string
 	GameplayOptions []ui.Option
+	MainMenuExtras  []ui.Option
 }
 
 type Shell struct {

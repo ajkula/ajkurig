@@ -1,6 +1,7 @@
 package shell
 
 import (
+	"slices"
 	"strconv"
 
 	"github.com/hajimehoshi/ebiten/v2"
@@ -108,11 +109,14 @@ func newMainMenu(shell *Shell) *MenuScreen {
 	screen := &MenuScreen{
 		Shell: shell, IsMain: true, IsBackdropLive: true, ShowsBench: true, ShowsDemoClip: true,
 		Title: func() string { return shell.Options.Title },
-		Menu: ui.Menu{Options: []ui.Option{
-			{Label: Label("menu.play"), Activate: shell.StartRun},
-			{Label: Label("menu.options"), Activate: func() { openOptions(shell, ScreenMenu) }},
-			{Label: Label("menu.quit"), Activate: func() { app.Quit() }},
-		}},
+		Menu: ui.Menu{Options: slices.Concat(
+			[]ui.Option{{Label: Label("menu.play"), Activate: shell.StartRun}},
+			shell.Options.MainMenuExtras,
+			[]ui.Option{
+				{Label: Label("menu.options"), Activate: func() { openOptions(shell, ScreenMenu) }},
+				{Label: Label("menu.quit"), Activate: func() { app.Quit() }},
+			},
+		)},
 	}
 	screen.BeforeUpdate = func(frame *rig.Frame) bool {
 		return shell.dismissBoardIfPressed(frame) || shell.toggleBenchIfSelected(frame)
