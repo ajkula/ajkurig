@@ -247,6 +247,21 @@ func press(app *rig.App, action input.Action) {
 	stepFor(app, rig.MenuLockSeconds+0.05, 0)
 }
 
+func TestInitialsLeadToTheScreenTheGameNamesAfterThem(t *testing.T) {
+	app, game, shell := newTestApp(t)
+	shell.Options.AfterNameEntry = ScreenHighScores
+	shell.StartRun()
+	stepFor(app, 1, 0)
+	game.score, game.isOver = 900, true
+	stepFor(app, rig.MenuLockSeconds+0.1, 0)
+	for range 3 {
+		press(app, input.ActionConfirm)
+	}
+	if app.CurrentScreen() != ScreenHighScores || app.Scores.Best().Score != 900 {
+		t.Fatalf("after the initials: screen %q, best %+v", app.CurrentScreen(), app.Scores.Best())
+	}
+}
+
 func TestBoardColumnsFitTheLongestRow(t *testing.T) {
 	const minimumGap = 48
 	longest := [4]string{scores.RankOrdinals[scores.DefaultTableSize-1], scores.FormatThousands(scores.MaximumScore), scores.FormatClock(99*60 + 59), "WWW"}

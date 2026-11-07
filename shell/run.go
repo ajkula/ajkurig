@@ -145,7 +145,7 @@ func (n *NameEntryScreen) Update(frame *rig.Frame) {
 	app.Settings.Initials = n.Entry.Initials()
 	app.SaveSettings()
 	n.Shell.RecordScoreAs(n.Entry.Initials())
-	app.Switch(ScreenGameOver)
+	app.Switch(n.Shell.Options.AfterNameEntry)
 }
 
 func (n *NameEntryScreen) Draw(frame *rig.Frame, screen *ebiten.Image) {
