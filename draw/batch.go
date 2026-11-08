@@ -116,6 +116,25 @@ func (b *SpriteBatch) AddSegment(fromX, fromY, toX, toY, width float32, tint col
 	b.indices = append(b.indices, base, base+1, base+2, base+1, base+3, base+2)
 }
 
+func (b *SpriteBatch) AddAnnulus(x, y, radius, width float32, tint colorx.RGB, alpha float32, segments int) {
+	inner, outer := max(0, radius-width/2), radius+width/2
+	center := b.textureSize / 2
+	base := uint32(len(b.vertices))
+	for step := range segments {
+		angle := float32(step) / float32(segments) * mathx.Tau
+		directionX, directionY := mathx.Cos(angle), mathx.Sin(angle)
+		b.vertices = append(b.vertices,
+			ebiten.Vertex{DstX: x + directionX*inner, DstY: y + directionY*inner, SrcX: center, SrcY: center, ColorR: tint[0], ColorG: tint[1], ColorB: tint[2], ColorA: alpha},
+			ebiten.Vertex{DstX: x + directionX*outer, DstY: y + directionY*outer, SrcX: center, SrcY: center, ColorR: tint[0], ColorG: tint[1], ColorB: tint[2], ColorA: alpha},
+		)
+	}
+	for step := range uint32(segments) {
+		next := (step + 1) % uint32(segments)
+		innerA, outerA, innerB, outerB := base+step*2, base+step*2+1, base+next*2, base+next*2+1
+		b.indices = append(b.indices, innerA, outerA, innerB, outerA, outerB, innerB)
+	}
+}
+
 func (b *SpriteBatch) Flush(screen *ebiten.Image) {
 	if len(b.indices) == 0 {
 		return
