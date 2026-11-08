@@ -26,6 +26,7 @@ var directives = map[string]directive{
 	"title":      parseTitle,
 	"tempo":      parseTempo,
 	"tempoboost": parseTempoBoost,
+	"restart":    parseRestart,
 	"speed":      parseSpeed,
 	"pan":        parsePan,
 	"instrument": parseInstrument,
@@ -167,6 +168,10 @@ func parseTempo(document *Document, fields []string, _ *parser) error {
 
 func parseTempoBoost(document *Document, fields []string, _ *parser) error {
 	return parseIntegerInto(&document.TempoBoost, fields)
+}
+
+func parseRestart(document *Document, fields []string, _ *parser) error {
+	return parseIntegerInto(&document.Restart, fields)
 }
 
 func parseSpeed(document *Document, fields []string, _ *parser) error {

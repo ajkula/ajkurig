@@ -44,6 +44,7 @@ type Document struct {
 	Title        string
 	Tempo        int
 	TempoBoost   int
+	Restart      int
 	Speed        int
 	Pans         [Channels]float32
 	ChannelNames [Channels]string

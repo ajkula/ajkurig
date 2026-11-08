@@ -6,6 +6,7 @@ import (
 	"math"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -495,4 +496,47 @@ func TestGameThreadNeverWaitsForTheMusic(t *testing.T) {
 	default:
 	}
 	<-done
+}
+
+func TestInterludeHoldsThePlaylistUntilItStops(t *testing.T) {
+	engine := NewSilentEngine(NewSoundBank(), NewSignalBoard())
+	songs := exampleSongs()
+	engine.SetSongs(songs)
+	engine.applyControls()
+	interlude := songs[len(songs)-1]
+	engine.StartInterlude(interlude)
+	engine.applyControls()
+	if !engine.IsInterludePlaying() || engine.tracker.song != interlude {
+		t.Fatal("the interlude did not take over")
+	}
+	engine.SelectSong(1)
+	engine.applyControls()
+	if engine.tracker.song != interlude || engine.CurrentSong() != 1 {
+		t.Fatal("selecting a song cut the interlude or was forgotten")
+	}
+	engine.StopInterlude()
+	engine.applyControls()
+	if engine.IsInterludePlaying() || engine.tracker.song != songs[1] || engine.fadingTracker == nil {
+		t.Fatal("the playlist did not crossfade back in after the interlude")
+	}
+}
+
+func TestRestartSkipsTheIntroWhenTheOrderLoops(t *testing.T) {
+	song, err := ParseSong("tempo 120\nspeed 1\norder 0 1\nrestart 1\npattern 0\nC-4 01 ...\npattern 1\nD-4 01 ...\nE-4 01 ...\n")
+	if err != nil {
+		t.Fatal(err)
+	}
+	tracker := NewTracker(song, NewSignalBoard())
+	visited := []int{}
+	for range 6 {
+		orderIndex, _ := tracker.Position()
+		visited = append(visited, orderIndex)
+		tracker.processTick()
+	}
+	if want := []int{0, 1, 1, 1, 1, 1}; !slices.Equal(visited, want) {
+		t.Fatalf("order positions %v, want %v", visited, want)
+	}
+	if _, err := ParseSong("tempo 120\norder 0\nrestart 1\npattern 0\nC-4 01 ...\n"); err == nil {
+		t.Fatal("a restart outside the order list was accepted")
+	}
 }

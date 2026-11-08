@@ -102,10 +102,16 @@ func (d *Document) render(order []int, layers [Channels]Layer) string {
 		fmt.Fprintf(&builder, "layer %-8d %-10s %s\n", channel+1, layer.Signal, formatFloat(layer.Threshold))
 	}
 	builder.WriteString("\norder " + joinInts(order) + "\n")
+	restart := clampRestart(d.Restart, len(order))
+	builder.WriteString([2]string{"", fmt.Sprintf("restart %d\n", restart)}[boolToIndex(restart > 0)])
 	for _, pattern := range d.Patterns {
 		d.writePattern(&builder, pattern)
 	}
 	return builder.String()
+}
+
+func clampRestart(restart, orderLength int) int {
+	return max(0, min(restart, orderLength-1))
 }
 
 func writeInstrument(builder *strings.Builder, instrument Instrument) {

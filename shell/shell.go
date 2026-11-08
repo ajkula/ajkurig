@@ -198,6 +198,7 @@ func (s *Shell) UpdateBackdrop(frame *rig.Frame) {
 	frame.IsDemo = true
 	s.App.SimulateWorld(frame)
 	frame.Controls = menuControls
+	s.App.Jukebox.StopInterlude()
 	s.App.Jukebox.Update(s.App.Jukebox.MenuSlot(max(0, s.DemoSlot)/max(1, s.Options.ClipsPerBoard)), frame.Delta)
 }
 

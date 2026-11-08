@@ -39,6 +39,7 @@ type Engine struct {
 	crossfade       float32
 	songs           []*Song
 	songIndex       int
+	interlude       *Song
 	room            StereoRoom
 	random          rng.Random
 	musicVolume     float32
@@ -185,12 +186,35 @@ func (e *Engine) SelectSong(index int) bool {
 	if e == nil || index == e.songIndex || index < 0 || index >= len(e.songs) {
 		return false
 	}
-	tracker := NewTracker(e.songs[index], e.board)
 	e.songIndex = index
-	e.mutex.Lock()
-	defer e.mutex.Unlock()
-	e.incoming, e.isCrossfading = tracker, true
+	if e.interlude != nil {
+		return true
+	}
+	e.crossfadeTo(e.songs[index])
 	return true
+}
+
+func (e *Engine) StartInterlude(song *Song) {
+	if e == nil || song == nil || e.interlude == song {
+		return
+	}
+	e.interlude = song
+	e.crossfadeTo(song)
+}
+
+func (e *Engine) StopInterlude() {
+	if e == nil || e.interlude == nil {
+		return
+	}
+	e.interlude = nil
+	if len(e.songs) == 0 {
+		return
+	}
+	e.crossfadeTo(e.songs[e.songIndex])
+}
+
+func (e *Engine) IsInterludePlaying() bool {
+	return e != nil && e.interlude != nil
 }
 
 func (e *Engine) SetEffectsVolume(volume float32) {
@@ -243,6 +267,13 @@ func (e *Engine) Read(buffer []byte) (int, error) {
 }
 
 // ===== Internal =====
+
+func (e *Engine) crossfadeTo(song *Song) {
+	tracker := NewTracker(song, e.board)
+	e.mutex.Lock()
+	defer e.mutex.Unlock()
+	e.incoming, e.isCrossfading = tracker, true
+}
 
 func (e *Engine) readSettings() engineSettings {
 	if e == nil {

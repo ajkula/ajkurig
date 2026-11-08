@@ -67,6 +67,7 @@ func (p *PlayScreen) Update(frame *rig.Frame) {
 	shell.RunStatus = shell.Game.Status()
 	app.Jukebox.Update(app.Jukebox.RunSlot(shell.RunStatus.Seconds), frame.Delta)
 	if shell.RunStatus.IsOver {
+		app.Jukebox.StopInterlude()
 		app.IsCursorHidden = false
 		app.Switch(ScreenNameEntry)
 		return

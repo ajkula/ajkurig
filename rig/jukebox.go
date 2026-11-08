@@ -3,6 +3,7 @@ package rig
 import (
 	"time"
 
+	"github.com/ajkula/ajkurig/audio"
 	"github.com/ajkula/ajkurig/rng"
 	"github.com/ajkula/ajkurig/ui"
 )
@@ -105,10 +106,26 @@ func (j *Jukebox) NextEnabled(current int) int {
 }
 
 func (j *Jukebox) Play(index int) {
-	if !j.app.Audio.SelectSong(index) {
+	if !j.app.Audio.SelectSong(index) || j.app.Audio.IsInterludePlaying() {
 		return
 	}
 	j.Banner.Show(songMark+j.app.Audio.SongTitle(index), j.BannerSeconds)
+}
+
+func (j *Jukebox) StartInterlude(song *audio.Song) {
+	if song == nil || j.app.Audio.IsInterludePlaying() {
+		return
+	}
+	j.app.Audio.StartInterlude(song)
+	j.Banner.Show(songMark+song.Title, j.BannerSeconds)
+}
+
+func (j *Jukebox) StopInterlude() {
+	if !j.app.Audio.IsInterludePlaying() {
+		return
+	}
+	j.app.Audio.StopInterlude()
+	j.Banner.Show(songMark+j.app.Audio.SongTitle(j.app.Audio.CurrentSong()), j.BannerSeconds)
 }
 
 // ===== Internal =====

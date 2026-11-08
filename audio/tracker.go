@@ -32,6 +32,7 @@ type Song struct {
 	IntensityNames []string
 	Patterns       map[int]*Pattern
 	Order          []int
+	RestartOrder   int
 }
 
 type ChannelLayer struct {
@@ -98,6 +99,7 @@ var songDirectives = map[string]songDirective{
 	"pattern":    parsePatternHeader,
 	"layer":      parseLayer,
 	"tempoboost": parseTempoBoost,
+	"restart":    parseRestart,
 	"intensity":  parseIntensity,
 }
 
@@ -143,6 +145,9 @@ func ParseSong(source string) (*Song, error) {
 func ValidateSong(song *Song) error {
 	if len(song.Order) == 0 || song.Tempo <= 0 || song.Speed <= 0 {
 		return fmt.Errorf("song needs an order list, a tempo and a speed")
+	}
+	if song.RestartOrder < 0 || song.RestartOrder >= len(song.Order) {
+		return fmt.Errorf("restart %d is outside the order list", song.RestartOrder)
 	}
 	for _, id := range song.Order {
 		if pattern, exists := song.Patterns[id]; !exists || len(pattern.Rows) == 0 {
@@ -468,6 +473,10 @@ func parseTempoBoost(song *Song, fields []string, _ *songParser) error {
 	return parseIntegerInto(&song.TempoBoost, fields)
 }
 
+func parseRestart(song *Song, fields []string, _ *songParser) error {
+	return parseIntegerInto(&song.RestartOrder, fields)
+}
+
 func (t *Tracker) processTick() {
 	if t.tick == 0 {
 		t.playRow()
@@ -484,7 +493,8 @@ func (t *Tracker) processTick() {
 		return
 	}
 	t.row = 0
-	t.orderIndex = (t.orderIndex + 1) % len(t.song.Order)
+	next := t.orderIndex + 1
+	t.orderIndex = next - (next-t.song.RestartOrder)*boolToIndex(next >= len(t.song.Order))
 }
 
 func (t *Tracker) playRow() {
