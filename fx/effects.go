@@ -69,6 +69,7 @@ type Effects struct {
 	Bolts         []Bolt
 	Popups        []Popup
 	Smokes        []Smoke
+	Debris        []Debris
 	Skids         Skids
 	ShakeTrauma   float32
 	ShakeX        float32
@@ -128,6 +129,7 @@ func NewEffects(seed uint32) *Effects {
 		Bolts:       make([]Bolt, 0, maximumBolts),
 		Popups:      make([]Popup, 0, maximumPopups),
 		Smokes:      make([]Smoke, 0, maximumSmokes),
+		Debris:      make([]Debris, 0, maximumDebris),
 		ShakeFactor: 1,
 		Density:     1,
 		random:      rng.New(seed),
@@ -256,6 +258,7 @@ func (e *Effects) Update(deltaSeconds float32) {
 	for index := range e.Popups {
 		e.Popups[index].Y -= popupRiseSpeed * deltaSeconds
 	}
+	e.updateDebris(deltaSeconds)
 	e.ShakeTrauma = max(0, e.ShakeTrauma-shakeDecay*deltaSeconds)
 	e.Skids.Update(deltaSeconds)
 	magnitude := e.ShakeTrauma * e.ShakeTrauma * shakeAmplitude * e.ShakeFactor
@@ -264,7 +267,7 @@ func (e *Effects) Update(deltaSeconds float32) {
 
 func (e *Effects) Clear() {
 	e.ParticleCount = 0
-	e.Rings, e.Bolts, e.Popups, e.Smokes = e.Rings[:0], e.Bolts[:0], e.Popups[:0], e.Smokes[:0]
+	e.Rings, e.Bolts, e.Popups, e.Smokes, e.Debris = e.Rings[:0], e.Bolts[:0], e.Popups[:0], e.Smokes[:0], e.Debris[:0]
 	e.ShakeTrauma, e.ShakeX, e.ShakeY = 0, 0, 0
 	e.Skids.Clear()
 }
@@ -273,6 +276,7 @@ func (e *Effects) Queue(batches *draw.Batches, camera *draw.Camera) {
 	e.queueSkids(batches, camera)
 	e.queueSmokes(batches, camera)
 	e.queueParticles(batches, camera)
+	e.queueDebrisShadows(batches, camera)
 	e.queueRings(batches, camera)
 	e.queueBolts(batches, camera)
 }
