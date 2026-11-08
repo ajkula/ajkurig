@@ -23,6 +23,8 @@ type Language struct {
 
 // ===== Constants =====
 
+var rightToLeftScripts = map[string]bool{"arabic": true}
+
 const (
 	FallbackCode    = "en"
 	DefaultCode     = "default"
@@ -73,6 +75,10 @@ func Use(code string) bool {
 	language, exists := languages[code]
 	current = [2]*Language{fallback, language}[boolToIndex(exists)]
 	return exists
+}
+
+func IsRightToLeft() bool {
+	return current != nil && rightToLeftScripts[current.Script]
 }
 
 func Current() Language {

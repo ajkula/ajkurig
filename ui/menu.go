@@ -324,12 +324,13 @@ func (k *Kit) drawDrumRow(screen *ebiten.Image, option *Option, centerX, y, alph
 	drum := option.Drum
 	label := option.Label()
 	labelWidth := k.Text.Width(label, FaceBold)
-	k.Text.Draw(screen, label, FaceBold, centerX-drumLabelGap/2, y, mathx.Pick(isSelected, k.Theme.Text, k.Theme.Accent), alpha, text.AlignEnd)
+	span := MirrorSpan{Left: centerX, Right: centerX}
+	k.Text.Draw(screen, label, FaceBold, span.X(centerX-drumLabelGap/2), y, mathx.Pick(isSelected, k.Theme.Text, k.Theme.Accent), alpha, MirrorAlign(text.AlignEnd))
 	k.drawSelectionMarkers(screen, 2*max(labelWidth, drumWidth)+drumLabelGap, centerX, y, alpha, isSelected, clock)
-	namesX := centerX + drumLabelGap/2
+	namesX := span.X(centerX + drumLabelGap/2)
 	centerY := y + drumTextHeight/2 + drumTextLift
 	k.drawDrumNames(screen, drum, namesX, centerY, isSelected)
-	arrowX := namesX + drumArrowWidth/2 + drumArrowIndent
+	arrowX := span.X(centerX + drumLabelGap/2 + drumArrowWidth/2 + drumArrowIndent)
 	arrowAlpha := mathx.BoolToFloat(drum.IsFocused)
 	k.drawDrumArrow(screen, arrowX, centerY-drumWindowHalf-drumArrowGap, -1, drum.ArrowSeconds < 0, arrowAlpha)
 	k.drawDrumArrow(screen, arrowX, centerY+drumWindowHalf+drumArrowGap, 1, drum.ArrowSeconds > 0, arrowAlpha)
@@ -350,7 +351,7 @@ func (k *Kit) drawDrumNames(screen *ebiten.Image, drum *Drum, namesX, centerY fl
 		alpha := mathx.Clamp(1-mathx.Abs(distance)*drumFadePerSlot, 0, 1)
 		isHighlighted := mathx.Abs(distance) < 0.5 && (isSelected || drum.IsFocused)
 		itemY := centerY + distance*drumSlotHeight - drumTextHeight/2 - drumTextLift
-		k.Text.Draw(window, items[mathx.WrapIndex(slot, len(items))], FaceBold, namesX, itemY, mathx.Pick(isHighlighted, k.Theme.Text, k.Theme.Accent), alpha, text.AlignStart)
+		k.Text.Draw(window, items[mathx.WrapIndex(slot, len(items))], FaceBold, namesX, itemY, mathx.Pick(isHighlighted, k.Theme.Text, k.Theme.Accent), alpha, MirrorAlign(text.AlignStart))
 	}
 }
 

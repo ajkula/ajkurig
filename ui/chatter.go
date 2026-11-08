@@ -120,14 +120,14 @@ func (k *Kit) DrawBubble(screen *ebiten.Image, chatter *Chatter, anchorX, anchor
 	top := mathx.Floor(mathx.Clamp(anchorY-style.Lift-height, 0, k.Height-height))
 	draw.FillRect(screen, left, top, boxWidth+2*style.Padding, height, colorx.NRGBA(style.BoxColor, style.Alpha))
 	window := draw.Window(screen, left+style.Padding, top, left+style.Padding+boxWidth, top+height)
-	offset := marqueeOffset(chatter.Seconds*style.ScrollSpeed, boxWidth)
+	offset := marqueeOffset(chatter.Seconds*style.ScrollSpeed, boxWidth, textWidth, k.Text.IsRightToLeft(message))
 	k.Text.Draw(window, message, style.Face, left+style.Padding+offset, top+style.Padding-style.TextRise, style.TextColor, 1, text.AlignStart)
 }
 
 // ===== Internal =====
 
-func marqueeOffset(scrolled, boxWidth float32) float32 {
-	return boxWidth - mathx.Floor(scrolled)
+func marqueeOffset(scrolled, boxWidth, textWidth float32, isRightToLeft bool) float32 {
+	return mathx.Pick(isRightToLeft, boxWidth-mathx.Floor(scrolled), mathx.Floor(scrolled)-textWidth)
 }
 
 func sampleOf(characters int) string {

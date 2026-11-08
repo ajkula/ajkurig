@@ -23,13 +23,13 @@ var testTopics = []Topic{
 func TestChatterEntersRightAndLeavesLeftPixelByPixel(t *testing.T) {
 	boxWidth, textWidth := float32(160), float32(300)
 	speed := DefaultBubbleStyle.ScrollSpeed
-	if marqueeOffset(0, boxWidth) != boxWidth {
+	if marqueeOffset(0, boxWidth, textWidth, false) != boxWidth {
 		t.Fatal("the line does not start beyond the right edge")
 	}
-	if step := marqueeOffset(0.5, boxWidth); step != boxWidth {
+	if step := marqueeOffset(0.5, boxWidth, textWidth, false); step != boxWidth {
 		t.Fatalf("the line moved by a fraction of a pixel: %v", step)
 	}
-	if marqueeOffset(1.5, boxWidth) != boxWidth-1 {
+	if marqueeOffset(1.5, boxWidth, textWidth, false) != boxWidth-1 {
 		t.Fatal("the line does not advance one whole pixel at a time")
 	}
 	chatter := NewChatter(DefaultBubbleStyle, testTopics)

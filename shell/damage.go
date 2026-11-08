@@ -8,6 +8,7 @@ import (
 	"github.com/hajimehoshi/ebiten/v2"
 	"github.com/hajimehoshi/ebiten/v2/text/v2"
 
+	"github.com/ajkula/ajkurig/i18n"
 	"github.com/ajkula/ajkurig/ui"
 )
 
@@ -35,14 +36,14 @@ type damageEvent struct {
 
 const (
 	DefaultDamageWindowSeconds = 2
-	killedByTitle              = "KILLED BY"
+	killedByTitleKey           = "run.killed_by"
+	killedByTitleIndentSample  = "KI"
 	killedByRight              = 60
 	killedByWidth              = 380
 	killedByTop                = 458
 	killedByRowHeight          = 28
 	killedByHitsColumn         = 110
 	killedByMaximumRows        = 4
-	killedByTitleIndentGlyphs  = 2
 	continuousGapTicks         = 2
 )
 
@@ -123,13 +124,15 @@ func (s *Shell) drawKilledBy(screen *ebiten.Image) {
 	tint, rim := kit.Theme.KilledBy, kit.Theme.KilledByRim
 	right := kit.Width - killedByRight
 	left := right - killedByWidth
-	titleIndent := kit.Text.Width(killedByTitle[:killedByTitleIndentGlyphs], ui.FaceBold)
-	kit.Text.DrawOutlined(screen, killedByTitle, ui.FaceBold, left+titleIndent, killedByTop, tint, rim, text.AlignStart)
+	titleIndent := kit.Text.Width(killedByTitleIndentSample, ui.FaceBold)
+	span := ui.MirrorSpan{Left: left, Right: right}
+	startAlign, endAlign := ui.MirrorAlign(text.AlignStart), ui.MirrorAlign(text.AlignEnd)
+	kit.Text.DrawOutlined(screen, i18n.T(killedByTitleKey), ui.FaceBold, span.X(left+titleIndent), killedByTop, tint, rim, startAlign)
 	for row, cause := range causes[:min(len(causes), killedByMaximumRows)] {
 		y := killedByTop + float32(row+1)*killedByRowHeight + 6
-		kit.Text.DrawOutlined(screen, cause.Source, ui.FaceRegular, left, y, tint, rim, text.AlignStart)
-		kit.Text.DrawOutlined(screen, hitsLabel(cause.Hits), ui.FaceRegular, right-killedByHitsColumn, y, tint, rim, text.AlignEnd)
-		kit.Text.DrawOutlined(screen, strconv.Itoa(int(cause.Damage+0.5)), ui.FaceRegular, right, y, tint, rim, text.AlignEnd)
+		kit.Text.DrawOutlined(screen, i18n.T(cause.Source), ui.FaceRegular, span.X(left), y, tint, rim, startAlign)
+		kit.Text.DrawOutlined(screen, hitsLabel(cause.Hits), ui.FaceRegular, span.X(right-killedByHitsColumn), y, tint, rim, endAlign)
+		kit.Text.DrawOutlined(screen, strconv.Itoa(int(cause.Damage+0.5)), ui.FaceRegular, span.X(right), y, tint, rim, endAlign)
 	}
 }
 

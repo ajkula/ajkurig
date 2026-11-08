@@ -238,7 +238,7 @@ func (s *Shell) HighScoreLine() string {
 
 func withDefaults(options Options, app *rig.App) Options {
 	options.Title = mathx.Pick(options.Title == "", options.Title, app.Config.Title)
-	options.GameOverTitle = mathx.Pick(options.GameOverTitle == "", options.GameOverTitle, "GAME OVER")
+	options.GameOverTitle = mathx.Pick(options.GameOverTitle == "", options.GameOverTitle, "run.game_over")
 	options.AfterNameEntry = mathx.Pick(options.AfterNameEntry == "", options.AfterNameEntry, ScreenGameOver)
 	options.RankingTitle = mathx.Pick(options.RankingTitle == "", options.RankingTitle, "RANKING")
 	options.Columns = mathx.Pick(len(options.Columns) == 0, options.Columns, DefaultColumns())
@@ -254,7 +254,7 @@ func withDefaults(options Options, app *rig.App) Options {
 }
 
 func defaultHighScoreLine(entry scores.Entry) string {
-	return "HI " + scores.FormatThousands(entry.Score) + "  " + entry.Initials + "  " + scores.FormatClock(entry.Seconds)
+	return i18n.F("run.high_score", scores.FormatThousands(entry.Score)) + "  " + entry.Initials + "  " + scores.FormatClock(entry.Seconds)
 }
 
 func (s *Shell) nextDemoClipIfDone() {

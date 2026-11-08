@@ -57,8 +57,9 @@ func (b *Bench) DrawPanel(screen *ebiten.Image, x, y float32) {
 	height := float32(rows*benchRowHeight) + 2*benchPadding
 	kit := b.app.Kit
 	kit.Panel(screen, x, y, benchPanelWidth, height, 0.75)
-	kit.Text.Draw(screen, b.leftColumn, ui.FaceSmall, x+12, y+benchPadding, kit.Theme.Text, 1, text.AlignStart)
-	kit.Text.Draw(screen, b.rightColumn, ui.FaceSmall, x+benchRightColumn, y+benchPadding, kit.Theme.Text, 1, text.AlignStart)
+	span, align := ui.MirrorSpan{Left: x, Right: x + benchPanelWidth}, ui.MirrorAlign(text.AlignStart)
+	kit.Text.Draw(screen, b.leftColumn, ui.FaceSmall, span.X(x+12), y+benchPadding, kit.Theme.Text, 1, align)
+	kit.Text.Draw(screen, b.rightColumn, ui.FaceSmall, span.X(x+benchRightColumn), y+benchPadding, kit.Theme.Text, 1, align)
 }
 
 func (b *Bench) DebugLines() []string {

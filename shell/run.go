@@ -117,7 +117,7 @@ func (l *LevelUpScreen) Draw(frame *rig.Frame, screen *ebiten.Image) {
 	app.DrawWorld(frame, screen)
 	app.DrawHUD(frame, screen)
 	kit.Dim(screen, 0.6)
-	kit.Text.Draw(screen, "LEVEL UP", ui.FaceTitle, kit.Width/2, 110, kit.Theme.Accent, 1, text.AlignCenter)
+	kit.Text.Draw(screen, i18n.T("run.level_up"), ui.FaceTitle, kit.Width/2, 110, kit.Theme.Accent, 1, text.AlignCenter)
 	kit.DrawCards(screen, l.Cards, l.Selected, 260)
 	kit.Text.Draw(screen, app.Hint("hint.level_up"), ui.FaceRegular, kit.Width/2, 500, kit.Theme.Text, 1, text.AlignCenter)
 }
@@ -156,11 +156,11 @@ func (n *NameEntryScreen) Draw(frame *rig.Frame, screen *ebiten.Image) {
 	app.DrawHUD(frame, screen)
 	kit.Dim(screen, 0.75)
 	isRanked := shell.NewEntryRank != scores.NoRank
-	titles := [3]string{shell.Options.GameOverTitle, "GREAT SCORE!", "NEW HIGH SCORE!"}
+	titles := [3]string{i18n.T(shell.Options.GameOverTitle), i18n.T("run.great_score"), i18n.T("run.new_high_score")}
 	kit.Text.Draw(screen, titles[mathx.BoolToIndex(isRanked)+mathx.BoolToIndex(shell.NewEntryRank == 0)], ui.FaceTitle, kit.Width/2, kit.Theme.TitleTop, kit.Theme.Accent, ui.Pulse(frame.Clock), text.AlignCenter)
-	rankText := mathx.Pick(isRanked, "", "      RANK "+scores.Ordinal(shell.NewEntryRank))
-	kit.Text.Draw(screen, "SCORE "+scores.FormatThousands(shell.RunStatus.Score)+rankText, ui.FaceBold, kit.Width/2, 180, kit.Theme.Record, 1, text.AlignCenter)
-	kit.Text.Draw(screen, "ENTER YOUR INITIALS", ui.FaceBold, kit.Width/2, 230, kit.Theme.Text, 1, text.AlignCenter)
+	rankText := mathx.Pick(isRanked, "", "      "+i18n.F("run.rank", scores.Ordinal(shell.NewEntryRank)))
+	kit.Text.Draw(screen, i18n.F("run.score", scores.FormatThousands(shell.RunStatus.Score))+rankText, ui.FaceBold, kit.Width/2, 180, kit.Theme.Record, 1, text.AlignCenter)
+	kit.Text.Draw(screen, i18n.T("run.enter_initials"), ui.FaceBold, kit.Width/2, 230, kit.Theme.Text, 1, text.AlignCenter)
 	for index, letter := range n.Entry.Letters {
 		n.drawInitial(screen, kit, index, string(letter))
 	}
@@ -198,11 +198,11 @@ func (g *GameOverScreen) Draw(frame *rig.Frame, screen *ebiten.Image) {
 	theme := kit.Theme
 	app.DrawWorld(frame, screen)
 	kit.Dim(screen, 0.7)
-	kit.Text.Draw(screen, shell.Options.GameOverTitle, ui.FaceTitle, kit.Width/2, 70, theme.Warning, 1, text.AlignCenter)
-	kit.Text.Draw(screen, "SCORE "+scores.FormatThousands(shell.RunStatus.Score), ui.FaceTitle, kit.Width/2, 160, theme.Accent, 1, text.AlignCenter)
+	kit.Text.Draw(screen, i18n.T(shell.Options.GameOverTitle), ui.FaceTitle, kit.Width/2, 70, theme.Warning, 1, text.AlignCenter)
+	kit.Text.Draw(screen, i18n.F("run.score", scores.FormatThousands(shell.RunStatus.Score)), ui.FaceTitle, kit.Width/2, 160, theme.Accent, 1, text.AlignCenter)
 	isRanked := shell.NewEntryRank != scores.NoRank
 	rankState := mathx.BoolToIndex(isRanked) + mathx.BoolToIndex(shell.NewEntryRank == 0)
-	lines := [3]string{shell.HighScoreLine(), i18n.F("gameover.ranked", scores.Ordinal(max(0, shell.NewEntryRank))), "NEW HIGH SCORE!"}
+	lines := [3]string{shell.HighScoreLine(), i18n.F("gameover.ranked", scores.Ordinal(max(0, shell.NewEntryRank))), i18n.T("run.new_high_score")}
 	alpha := ui.Pulse(frame.Clock)*mathx.BoolToFloat(isRanked) + mathx.BoolToFloat(!isRanked)
 	kit.Text.Draw(screen, lines[rankState], ui.FaceBold, kit.Width/2, 250, mathx.Pick(isRanked, theme.Record, theme.Accent), alpha, text.AlignCenter)
 	kit.Text.Draw(screen, shell.RunStatus.Summary, ui.FaceBold, kit.Width/2, 295, theme.Text, 1, text.AlignCenter)

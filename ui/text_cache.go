@@ -64,7 +64,8 @@ func (t *Text) renderCached(key textKey) *cachedText {
 	t.makeRoomInCache()
 	face := t.faces[key.Kind]
 	lineSpacing := face.Size * float64(draw.Scale) * lineSpacingRatio
-	width, height := text.Measure(key.Message, t.scaledFace(face), lineSpacing)
+	_, height := text.Measure(key.Message, t.scaledFace(face), lineSpacing)
+	width := t.scaledWidth(key.Message, face)
 	padding := math.Ceil(textCachePadding * float64(draw.Scale))
 	anchor := math.Ceil(width * alignAnchors[key.Align])
 	image := ebiten.NewImage(int(math.Ceil(width)+2*padding)+1, int(math.Ceil(height)+2*padding)+1)

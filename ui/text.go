@@ -47,18 +47,19 @@ type wrapToken struct {
 }
 
 type Text struct {
-	Theme       *Theme
-	faces       [faceKindCount]*text.GoTextFace
-	families    map[string][2]*text.GoTextFaceSource
-	weights     map[*text.GoTextFaceSource]int
-	scaledFaces map[*text.GoTextFace]text.Face
-	faceScale   float32
-	layout      text.LayoutOptions
-	glyphs      []text.Glyph
-	glyphDraws  [2]ebiten.DrawImageOptions
-	cache       map[textKey]*cachedText
-	cacheScale  float32
-	blitOptions ebiten.DrawImageOptions
+	Theme            *Theme
+	faces            [faceKindCount]*text.GoTextFace
+	families         map[string][2]*text.GoTextFaceSource
+	weights          map[*text.GoTextFaceSource]int
+	scaledFaces      map[*text.GoTextFace]text.Face
+	rightToLeftFaces map[*text.GoTextFace]text.Face
+	faceScale        float32
+	layout           text.LayoutOptions
+	glyphs           []text.Glyph
+	glyphDraws       [2]ebiten.DrawImageOptions
+	cache            map[textKey]*cachedText
+	cacheScale       float32
+	blitOptions      ebiten.DrawImageOptions
 }
 
 // ===== Constants =====
@@ -94,6 +95,7 @@ var textStyles = [2]textStyle{
 }
 
 var fallbackFamilyFiles = map[string][2]string{
+	"arabic":   {"fonts/NotoSansArabic-Medium.ttf", "fonts/NotoSansArabic-Bold.ttf"},
 	"cyrillic": {"fonts/Exo2-Medium.ttf", "fonts/Exo2-Bold.ttf"},
 	"hangul":   {"fonts/NotoSansKR-Medium.ttf", "fonts/NotoSansKR-Bold.ttf"},
 	"han-jp":   {"fonts/NotoSansJP-Medium.ttf", "fonts/NotoSansJP-Bold.ttf"},
@@ -119,13 +121,14 @@ func NewText(theme *Theme, files FontFiles) *Text {
 	medium := loadFaceSource(files.Medium, goregular.TTF)
 	bold := loadFaceSource(files.Bold, gobold.TTF)
 	textKit := &Text{
-		Theme:       theme,
-		families:    map[string][2]*text.GoTextFaceSource{"go": {loadFaceSource(goregular.TTF, nil), loadFaceSource(gobold.TTF, nil)}},
-		weights:     map[*text.GoTextFaceSource]int{medium: 0, bold: 1},
-		scaledFaces: map[*text.GoTextFace]text.Face{},
-		faceScale:   1,
-		cache:       map[textKey]*cachedText{},
-		cacheScale:  1,
+		Theme:            theme,
+		families:         map[string][2]*text.GoTextFaceSource{"go": {loadFaceSource(goregular.TTF, nil), loadFaceSource(gobold.TTF, nil)}},
+		weights:          map[*text.GoTextFaceSource]int{medium: 0, bold: 1},
+		scaledFaces:      map[*text.GoTextFace]text.Face{},
+		rightToLeftFaces: map[*text.GoTextFace]text.Face{},
+		faceScale:        1,
+		cache:            map[textKey]*cachedText{},
+		cacheScale:       1,
 	}
 	textKit.faces = [faceKindCount]*text.GoTextFace{
 		FaceSmall:   {Source: bold, Size: theme.SmallSize},
@@ -143,6 +146,7 @@ func NewText(theme *Theme, files FontFiles) *Text {
 
 func (t *Text) ResetFaces() {
 	clear(t.scaledFaces)
+	clear(t.rightToLeftFaces)
 	t.clearCache()
 }
 
@@ -159,7 +163,7 @@ func (t *Text) DrawOutlined(screen *ebiten.Image, message string, kind FaceKind,
 }
 
 func (t *Text) Width(message string, kind FaceKind) float32 {
-	return float32(text.Advance(message, t.scaledFace(t.faces[kind]))) / draw.Scale
+	return float32(t.scaledWidth(message, t.faces[kind])) / draw.Scale
 }
 
 func (t *Text) Height(kind FaceKind) float32 {
@@ -202,11 +206,10 @@ func (t *Text) drawDirect(screen *ebiten.Image, message string, kind FaceKind, s
 	face := t.faces[kind]
 	isShadowed := kind == FaceSmall && !ink.IsOutlined
 	style := textStyles[mathx.BoolToIndex(isShadowed)]
-	scaledFace := t.scaledFace(face)
 	layout := &t.layout
 	layout.PrimaryAlign = align
 	layout.LineSpacing = face.Size * float64(draw.Scale) * lineSpacingRatio
-	t.glyphs = text.AppendGlyphs(t.glyphs[:0], message, scaledFace, layout)
+	t.glyphs = t.appendTextGlyphs(t.glyphs[:0], message, face, layout)
 	t.drawGlyphPass(screen, scaledX, scaledY, style.Shadows, colorx.NRGBA(mathx.Pick(ink.IsOutlined, t.Theme.Outline, ink.Outline), alpha*style.ShadowAlpha))
 	t.drawGlyphPass(screen, scaledX, scaledY, style.Strokes, colorx.NRGBA(mathx.Pick(isShadowed, ink.Tint, t.Theme.Text), alpha))
 	clear(t.glyphs)
@@ -248,6 +251,7 @@ func isGlyphOnScreen(bounds image.Rectangle, glyph *text.Glyph, originX, originY
 func (t *Text) scaledFace(face *text.GoTextFace) text.Face {
 	if t.faceScale != draw.Scale {
 		clear(t.scaledFaces)
+		clear(t.rightToLeftFaces)
 		t.faceScale = draw.Scale
 	}
 	scaled, isCached := t.scaledFaces[face]

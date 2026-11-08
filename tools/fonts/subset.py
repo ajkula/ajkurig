@@ -18,6 +18,7 @@ CACHE = pathlib.Path(__file__).resolve().parent / "cache"
 SOURCE = "https://github.com/google/fonts/raw/main/ofl/"
 
 FONTS = [
+    {"name": "NotoSansArabic", "source": "notosansarabic/NotoSansArabic%5Bwdth%2Cwght%5D.ttf", "scripts": ["arabic"]},
     {"name": "Exo2", "source": "exo2/Exo2%5Bwght%5D.ttf", "scripts": ["cyrillic"]},
     {"name": "NotoSansKR", "source": "notosanskr/NotoSansKR%5Bwght%5D.ttf", "scripts": ["hangul"]},
     {"name": "NotoSansJP", "source": "notosansjp/NotoSansJP%5Bwght%5D.ttf", "scripts": ["han-jp"]},
@@ -52,7 +53,7 @@ def characters_for(scripts, languages):
 
 def cached(source):
     CACHE.mkdir(exist_ok=True)
-    path = CACHE / source.split("/")[-1].replace("%5B", "[").replace("%5D", "]")
+    path = CACHE / source.split("/")[-1].replace("%5B", "[").replace("%5D", "]").replace("%2C", ",")
     if not path.exists():
         urllib.request.urlretrieve(SOURCE + source, path)
     return path
@@ -61,7 +62,9 @@ def cached(source):
 def build(font, characters):
     for weight_name, weight in WEIGHTS.items():
         variable = TTFont(cached(font["source"]))
-        static = instancer.instantiateVariableFont(variable, {"wght": weight})
+        axes = {axis.axisTag for axis in variable["fvar"].axes}
+        pinned = {"wght": weight, "wdth": 100} if "wdth" in axes else {"wght": weight}
+        static = instancer.instantiateVariableFont(variable, pinned)
         options = subset.Options()
         options.layout_features = ["*"]
         options.name_IDs = ["*"]
