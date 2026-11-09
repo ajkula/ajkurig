@@ -60,10 +60,11 @@ type GaitSettings struct {
 }
 
 type Gait struct {
-	Settings GaitSettings
-	Layouts  []LegLayout
-	Legs     []Leg
-	planted  []int
+	Settings      GaitSettings
+	Layouts       []LegLayout
+	Legs          []Leg
+	planted       []int
+	priorityGroup int
 }
 
 // ===== Public API =====
@@ -131,6 +132,7 @@ func (g *Gait) Plant(body *Body) {
 
 func (g *Gait) Update(body *Body, deltaSeconds float32) []int {
 	g.planted = g.planted[:0]
+	g.priorityGroup = g.mostOverdueGroup(body)
 	for index := range g.Legs {
 		g.updateLeg(body, index, deltaSeconds)
 	}
@@ -171,17 +173,41 @@ func (g *Gait) updateLeg(body *Body, index int, deltaSeconds float32) {
 	}
 	layout := &g.Layouts[index]
 	settings := &g.Settings
-	restX, restY := body.LocalToWorld(layout.RestForward, layout.RestSide)
-	desiredX, desiredY := restX+body.VelocityX*settings.StepLead, restY+body.VelocityY*settings.StepLead
+	desiredX, desiredY := g.desiredFoot(body, index)
 	threshold := settings.StepThreshold * body.Scale
 	isTooFar := mathx.DistanceSquared(state.FootX, state.FootY, desiredX, desiredY) > threshold*threshold
-	if !isTooFar || g.isOtherGroupStepping(layout.Group) {
+	hasTurn := g.priorityGroup == layout.Group && !g.isOtherGroupStepping(layout.Group)
+	if !isTooFar || !(hasTurn || g.isBeyondReach(body, index)) {
 		return
 	}
 	state.FromX, state.FromY = state.FootX, state.FootY
 	state.ToX = desiredX + (desiredX-state.FootX)*settings.StepOvershoot
 	state.ToY = desiredY + (desiredY-state.FootY)*settings.StepOvershoot
 	state.StepProgress, state.IsStepping = 0, true
+}
+
+func (g *Gait) desiredFoot(body *Body, index int) (float32, float32) {
+	layout := &g.Layouts[index]
+	restX, restY := body.LocalToWorld(layout.RestForward, layout.RestSide)
+	return restX + body.VelocityX*g.Settings.StepLead, restY + body.VelocityY*g.Settings.StepLead
+}
+
+func (g *Gait) isBeyondReach(body *Body, index int) bool {
+	hipX, hipY := g.HipPosition(body, index)
+	reach := (g.Settings.ThighLength + g.Settings.ShinLength) * body.Scale
+	return mathx.DistanceSquared(g.Legs[index].FootX, g.Legs[index].FootY, hipX, hipY) > reach*reach
+}
+
+func (g *Gait) mostOverdueGroup(body *Body) int {
+	group, farthest := -1, g.Settings.StepThreshold*body.Scale*g.Settings.StepThreshold*body.Scale
+	for index := range g.Legs {
+		desiredX, desiredY := g.desiredFoot(body, index)
+		distance := mathx.DistanceSquared(g.Legs[index].FootX, g.Legs[index].FootY, desiredX, desiredY)
+		isFarthest := !g.Legs[index].IsStepping && distance > farthest
+		group = mathx.Pick(isFarthest, group, g.Layouts[index].Group)
+		farthest = mathx.Pick(isFarthest, farthest, distance)
+	}
+	return group
 }
 
 func (g *Gait) isOtherGroupStepping(group int) bool {

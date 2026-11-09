@@ -61,3 +61,31 @@ func TestGaitStepsInAlternatingGroups(t *testing.T) {
 		t.Fatalf("only %d steps planted while walking", planted)
 	}
 }
+
+func TestGaitNeverLeavesALegStretchedWhileTheOtherGroupKeepsStepping(t *testing.T) {
+	layouts := []LegLayout{
+		{HipForward: 24, HipSide: -34, RestForward: 50, RestSide: -88, Group: 0},
+		{HipForward: 24, HipSide: 34, RestForward: 50, RestSide: 88, Group: 1},
+		{HipForward: 0, HipSide: -36, RestForward: 0, RestSide: -92, Group: 1},
+		{HipForward: 0, HipSide: 36, RestForward: 0, RestSide: 92, Group: 0},
+		{HipForward: -26, HipSide: -34, RestForward: -54, RestSide: -88, Group: 0},
+		{HipForward: -26, HipSide: 34, RestForward: -54, RestSide: 88, Group: 1},
+	}
+	gait := NewGait(GaitSettings{StepThreshold: 22, StepSeconds: 0.22, StepLead: 0.35, StepOvershoot: 0.3, StepLift: 12, ThighLength: 34, ShinLength: 42}, layouts)
+	body := &Body{Scale: 1}
+	gait.Plant(body)
+	const deltaSeconds = float32(1) / 60
+	for tick := range 3600 {
+		body.Heading += float32(1-2*((tick/70)%2)) * 0.7 * deltaSeconds
+		body.VelocityX, body.VelocityY = mathx.Cos(body.Heading)*60, mathx.Sin(body.Heading)*60
+		body.X += body.VelocityX * deltaSeconds
+		body.Y += body.VelocityY * deltaSeconds
+		gait.Update(body, deltaSeconds)
+		for leg := range gait.Legs {
+			hipX, hipY := gait.HipPosition(body, leg)
+			if stretch := mathx.Length(gait.Legs[leg].FootX-hipX, gait.Legs[leg].FootY-hipY); stretch > 76*1.35 {
+				t.Fatalf("leg %d stretched to %v at tick %d", leg, stretch, tick)
+			}
+		}
+	}
+}
