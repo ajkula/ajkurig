@@ -58,6 +58,7 @@ type Text struct {
 	glyphs           []text.Glyph
 	glyphDraws       [2]ebiten.DrawImageOptions
 	cache            map[textKey]*cachedText
+	sightings        map[textKey]bool
 	cacheScale       float32
 	blitOptions      ebiten.DrawImageOptions
 }
@@ -128,6 +129,7 @@ func NewText(theme *Theme, files FontFiles) *Text {
 		rightToLeftFaces: map[*text.GoTextFace]text.Face{},
 		faceScale:        1,
 		cache:            map[textKey]*cachedText{},
+		sightings:        map[textKey]bool{},
 		cacheScale:       1,
 	}
 	textKit.faces = [faceKindCount]*text.GoTextFace{

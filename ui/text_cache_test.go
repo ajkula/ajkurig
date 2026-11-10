@@ -20,10 +20,27 @@ func TestOpaqueTextIsRenderedOnceAndReused(t *testing.T) {
 	if textKit.CachedCount() != 1 {
 		t.Fatalf("%d cached images for one repeated text", textKit.CachedCount())
 	}
-	textKit.Draw(screen, "SCORE 12,340", FaceBold, 40.75, 20.5, DefaultTheme.Accent, 1, text.AlignCenter)
-	textKit.Draw(screen, "SCORE 12,340", FaceSmall, 40.25, 20.5, DefaultTheme.Accent, 1, text.AlignCenter)
+	for range 2 {
+		textKit.Draw(screen, "SCORE 12,340", FaceBold, 40.75, 20.5, DefaultTheme.Accent, 1, text.AlignCenter)
+		textKit.Draw(screen, "SCORE 12,340", FaceSmall, 40.25, 20.5, DefaultTheme.Accent, 1, text.AlignCenter)
+	}
 	if textKit.CachedCount() != 3 {
 		t.Fatalf("subpixel offset and face must get their own image, %d cached", textKit.CachedCount())
+	}
+}
+
+func TestTextChangingEveryFrameIsNeverCached(t *testing.T) {
+	textKit := NewText(&DefaultTheme, DefaultFontFiles())
+	screen := ebiten.NewImage(320, 120)
+	for kills := range 200 {
+		textKit.Draw(screen, fmt.Sprintf("KILLS %d", kills), FaceRegular, 300, 18, DefaultTheme.Text, 1, text.AlignEnd)
+	}
+	if textKit.CachedCount() != 0 {
+		t.Fatalf("%d images rendered for texts shown once", textKit.CachedCount())
+	}
+	textKit.Draw(screen, "KILLS 199", FaceRegular, 300, 18, DefaultTheme.Text, 1, text.AlignEnd)
+	if textKit.CachedCount() != 1 {
+		t.Fatal("a text seen twice was not cached")
 	}
 }
 

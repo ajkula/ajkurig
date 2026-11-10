@@ -30,9 +30,10 @@ type cachedText struct {
 // ===== Constants =====
 
 const (
-	maximumCachedTexts = 512
-	textSubpixelSteps  = 16
-	textCachePadding   = 4
+	maximumCachedTexts   = 512
+	maximumTextSightings = 2 * maximumCachedTexts
+	textSubpixelSteps    = 16
+	textCachePadding     = 4
 )
 
 var alignAnchors = [3]float64{text.AlignStart: 0, text.AlignCenter: 0.5, text.AlignEnd: 1}
@@ -50,6 +51,11 @@ func (t *Text) drawCached(screen *ebiten.Image, message string, kind FaceKind, s
 	originX, originY := math.Floor(scaledX), math.Floor(scaledY)
 	key := textKey{Message: message, Kind: kind, Ink: ink, Align: align, SubpixelX: subpixelStep(scaledX - originX), SubpixelY: subpixelStep(scaledY - originY)}
 	entry, isCached := t.cache[key]
+	wasSeen := isCached || t.recordSighting(key)
+	if !wasSeen {
+		t.drawDirect(screen, message, kind, scaledX, scaledY, ink, 1, align)
+		return
+	}
 	if !isCached {
 		entry = t.renderCached(key)
 	}
@@ -58,6 +64,15 @@ func (t *Text) drawCached(screen *ebiten.Image, message string, kind FaceKind, s
 	options.GeoM.Reset()
 	options.GeoM.Translate(originX+entry.OffsetX, originY+entry.OffsetY)
 	screen.DrawImage(entry.Image, options)
+}
+
+func (t *Text) recordSighting(key textKey) bool {
+	wasSeen := t.sightings[key]
+	if len(t.sightings) >= maximumTextSightings {
+		clear(t.sightings)
+	}
+	t.sightings[key] = true
+	return wasSeen
 }
 
 func (t *Text) renderCached(key textKey) *cachedText {
@@ -108,6 +123,7 @@ func (t *Text) clearCacheIfRescaled() {
 }
 
 func (t *Text) clearCache() {
+	clear(t.sightings)
 	for key, entry := range t.cache {
 		entry.Image.Deallocate()
 		delete(t.cache, key)

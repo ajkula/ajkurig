@@ -57,24 +57,6 @@ func StrokeRect(screen *ebiten.Image, x, y, width, height, strokeWidth float32, 
 	vector.StrokeRect(screen, x*Scale, y*Scale, width*Scale, height*Scale, strokeWidth*Scale, tint, false)
 }
 
-func FillRoundedRect(screen *ebiten.Image, x, y, width, height, radius float32, tint color.Color) {
-	if width <= 0 || height <= 0 {
-		return
-	}
-	left, top, right, bottom := x*Scale, y*Scale, (x+width)*Scale, (y+height)*Scale
-	corner := min(radius, width/2, height/2) * Scale
-	var path vector.Path
-	path.MoveTo(left+corner, top)
-	path.ArcTo(right, top, right, bottom, corner)
-	path.ArcTo(right, bottom, left, bottom, corner)
-	path.ArcTo(left, bottom, left, top, corner)
-	path.ArcTo(left, top, right, top, corner)
-	path.Close()
-	options := &vector.DrawPathOptions{AntiAlias: true}
-	options.ColorScale.ScaleWithColor(tint)
-	vector.FillPath(screen, &path, &vector.FillOptions{}, options)
-}
-
 func FillTriangle(screen *ebiten.Image, points [3][2]float32, tint colorx.RGB, alpha float32) {
 	var path vector.Path
 	path.MoveTo(points[0][0]*Scale, points[0][1]*Scale)
