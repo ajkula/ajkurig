@@ -76,36 +76,38 @@ type Effects struct {
 	ShakeY        float32
 	ShakeFactor   float32
 	Density       float32
+	Viewport      *draw.Camera
 	random        rng.Random
 }
 
 // ===== Constants =====
 
 const (
-	maximumParticles = 10000
-	maximumRings     = 96
-	maximumSmokes    = 600
-	maximumBolts     = 64
-	maximumPopups    = 28
-	boltSegments     = 7
-	boltJitter       = 14
-	smokeRiseSpeed   = 38
-	smokeDriftSpeed  = 14
-	smokeLifeSeconds = 1.1
-	flameRiseSpeed   = 90
-	smokeOpacity     = 0.5
-	dustLifeSeconds  = 1.8
-	dustSpreadSpeed  = 70
-	dustRiseSpeed    = 10
-	dustOpacity      = 0.55
-	RingLifeSeconds  = 0.35
-	BoltLifeSeconds  = 0.14
-	PopupLifeSeconds = 0.9
-	popupRiseSpeed   = 46
-	particleDrag     = 0.9
-	shakeDecay       = 2.2
-	shakeGain        = 0.05
-	shakeAmplitude   = 14
+	maximumParticles  = 10000
+	particleViewReach = 320
+	maximumRings      = 96
+	maximumSmokes     = 600
+	maximumBolts      = 64
+	maximumPopups     = 28
+	boltSegments      = 7
+	boltJitter        = 14
+	smokeRiseSpeed    = 38
+	smokeDriftSpeed   = 14
+	smokeLifeSeconds  = 1.1
+	flameRiseSpeed    = 90
+	smokeOpacity      = 0.5
+	dustLifeSeconds   = 1.8
+	dustSpreadSpeed   = 70
+	dustRiseSpeed     = 10
+	dustOpacity       = 0.55
+	RingLifeSeconds   = 0.35
+	BoltLifeSeconds   = 0.14
+	PopupLifeSeconds  = 0.9
+	popupRiseSpeed    = 46
+	particleDrag      = 0.9
+	shakeDecay        = 2.2
+	shakeGain         = 0.05
+	shakeAmplitude    = 14
 )
 
 var DefaultPalette = Palette{
@@ -292,7 +294,9 @@ func (e *Effects) DrawPopups(screen *ebiten.Image, kit *ui.Kit, camera *draw.Cam
 
 func (e *Effects) spawnParticle(x, y, velocityX, velocityY, life, size float32, color colorx.RGB) {
 	isThinnedOut := e.random.Float() >= e.Density
-	if e.ParticleCount >= maximumParticles || isThinnedOut {
+	isFull := float32(e.ParticleCount) >= maximumParticles*e.Density
+	isOutOfView := e.Viewport != nil && !e.Viewport.IsVisible(x, y, particleViewReach)
+	if isFull || isThinnedOut || isOutOfView {
 		return
 	}
 	index := e.ParticleCount
@@ -333,7 +337,8 @@ func (e *Effects) queueSmokes(batches *draw.Batches, camera *draw.Camera) {
 		smoke := &e.Smokes[index]
 		screenX, screenY := camera.ToScreen(smoke.X, smoke.Y)
 		fade := smoke.Life / smoke.MaxLife
-		batches.Solid.AddCircle(screenX, screenY, smoke.Size*(2-fade), smoke.Color, smoke.Opacity*fade)
+		radius := smoke.Size * (2 - fade)
+		batches.Solid.AddCircleIf(screenX, screenY, radius, smoke.Color, smoke.Opacity*fade, camera.IsVisible(smoke.X, smoke.Y, radius))
 	}
 }
 
@@ -341,7 +346,8 @@ func (e *Effects) queueParticles(batches *draw.Batches, camera *draw.Camera) {
 	for index := range e.ParticleCount {
 		screenX, screenY := camera.ToScreen(e.ParticleX[index], e.ParticleY[index])
 		fade := e.Life[index] / e.MaxLife[index]
-		batches.Glow.AddCircle(screenX, screenY, e.Size[index]*(1+fade), e.Color[index], fade)
+		radius := e.Size[index] * (1 + fade)
+		batches.Glow.AddCircleIf(screenX, screenY, radius, e.Color[index], fade, camera.IsVisible(e.ParticleX[index], e.ParticleY[index], radius))
 	}
 }
 
