@@ -1,6 +1,8 @@
 package draw
 
 import (
+	"sync"
+
 	"github.com/hajimehoshi/ebiten/v2"
 
 	"github.com/ajkula/ajkurig/colorx"
@@ -31,13 +33,19 @@ const (
 	batchQuadCapacity = 32768
 )
 
+var (
+	batchTexturesOnce sync.Once
+	batchTextures     [3]*ebiten.Image
+)
+
 // ===== Public API =====
 
 func NewBatches() *Batches {
+	batchTexturesOnce.Do(buildBatchTextures)
 	return &Batches{
-		Solid: NewSpriteBatch(NewRadialTexture(spriteTextureSize, SolidFalloff), ebiten.BlendSourceOver),
-		Glow:  NewSpriteBatch(NewRadialTexture(spriteTextureSize, GlowFalloff), ebiten.BlendLighter),
-		Rings: NewSpriteBatch(NewRadialTexture(ringTextureSize, RingFalloff), ebiten.BlendLighter),
+		Solid: NewSpriteBatch(batchTextures[0], ebiten.BlendSourceOver),
+		Glow:  NewSpriteBatch(batchTextures[1], ebiten.BlendLighter),
+		Rings: NewSpriteBatch(batchTextures[2], ebiten.BlendLighter),
 	}
 }
 
@@ -173,4 +181,14 @@ func RingFalloff(distance, half float32) float32 {
 func GlowFalloff(distance, half float32) float32 {
 	remaining := mathx.Clamp(1-distance, 0, 1)
 	return remaining * remaining
+}
+
+// ===== Internal =====
+
+func buildBatchTextures() {
+	batchTextures = [3]*ebiten.Image{
+		NewRadialTexture(spriteTextureSize, SolidFalloff),
+		NewRadialTexture(spriteTextureSize, GlowFalloff),
+		NewRadialTexture(ringTextureSize, RingFalloff),
+	}
 }
