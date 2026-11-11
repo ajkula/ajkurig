@@ -65,8 +65,7 @@ func packageMacOS(release *Release, archivePath string) error {
 
 func mergeFatBinary(output string, inputs []string) error {
 	alignment := int64(1) << fatAlignmentPower
-	header := new(bytes.Buffer)
-	writeBigEndian(header, uint32(fatMagic), uint32(len(inputs)))
+	header := appendBigEndian(make([]byte, 0, fatHeaderSize+fatArchSize*len(inputs)), uint32(fatMagic), uint32(len(inputs)))
 	offset := alignUp(int64(fatHeaderSize+fatArchSize*len(inputs)), alignment)
 	layout := make([]int64, len(inputs))
 	for index, input := range inputs {
@@ -75,18 +74,18 @@ func mergeFatBinary(output string, inputs []string) error {
 			return err
 		}
 		layout[index] = offset
-		writeBigEndian(header, cpuType, cpuSubtype, uint32(offset), uint32(size), uint32(fatAlignmentPower))
+		header = appendBigEndian(header, cpuType, cpuSubtype, uint32(offset), uint32(size), uint32(fatAlignmentPower))
 		offset = alignUp(offset+size, alignment)
 	}
-	return writeFatFile(output, header.Bytes(), inputs, layout)
+	return writeFatFile(output, header, inputs, layout)
 }
 
-func writeFatFile(output string, header []byte, inputs []string, layout []int64) error {
+func writeFatFile(output string, header []byte, inputs []string, layout []int64) (err error) {
 	file, err := os.Create(output)
 	if err != nil {
 		return err
 	}
-	defer file.Close()
+	defer joinCloseError(&err, file)
 	if _, err := file.Write(header); err != nil {
 		return err
 	}
@@ -98,12 +97,12 @@ func writeFatFile(output string, header []byte, inputs []string, layout []int64)
 	return nil
 }
 
-func copySliceAt(file *os.File, input string, offset int64) error {
+func copySliceAt(file *os.File, input string, offset int64) (err error) {
 	source, err := os.Open(input)
 	if err != nil {
 		return err
 	}
-	defer source.Close()
+	defer joinCloseError(&err, source)
 	if _, err := file.Seek(offset, io.SeekStart); err != nil {
 		return err
 	}
@@ -111,12 +110,12 @@ func copySliceAt(file *os.File, input string, offset int64) error {
 	return err
 }
 
-func readMachHeader(path string) (uint32, uint32, int64, error) {
+func readMachHeader(path string) (cpuType, cpuSubtype uint32, size int64, err error) {
 	file, err := os.Open(path)
 	if err != nil {
 		return 0, 0, 0, err
 	}
-	defer file.Close()
+	defer joinCloseError(&err, file)
 	header := make([]byte, machHeaderSize)
 	if _, err := io.ReadFull(file, header); err != nil {
 		return 0, 0, 0, err
@@ -128,10 +127,11 @@ func readMachHeader(path string) (uint32, uint32, int64, error) {
 	return binary.LittleEndian.Uint32(header[4:]), binary.LittleEndian.Uint32(header[8:]), info.Size(), nil
 }
 
-func writeBigEndian(buffer *bytes.Buffer, values ...uint32) {
+func appendBigEndian(header []byte, values ...uint32) []byte {
 	for _, value := range values {
-		_ = binary.Write(buffer, binary.BigEndian, value)
+		header = binary.BigEndian.AppendUint32(header, value)
 	}
+	return header
 }
 
 func alignUp(value, alignment int64) int64 {

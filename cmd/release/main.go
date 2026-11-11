@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/json"
+	"errors"
 	"flag"
 	"fmt"
 	"os"
@@ -87,7 +88,7 @@ func main() {
 
 // ===== Internal =====
 
-func run() error {
+func run() (err error) {
 	requested := flag.String("targets", allTargets, "comma-separated targets: "+targetNames())
 	configPath := flag.String("config", configFileName, "release settings: name, binary, package, bundleId, category")
 	flag.Parse()
@@ -103,8 +104,10 @@ func run() error {
 	if err != nil {
 		return err
 	}
-	defer os.RemoveAll(workDir)
-	os.RemoveAll(distDirectory)
+	defer func() { err = errors.Join(err, os.RemoveAll(workDir)) }()
+	if err := os.RemoveAll(distDirectory); err != nil {
+		return err
+	}
 	if err := os.MkdirAll(distDirectory, 0o755); err != nil {
 		return err
 	}

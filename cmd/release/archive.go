@@ -4,6 +4,7 @@ import (
 	"archive/tar"
 	"archive/zip"
 	"compress/gzip"
+	"errors"
 	"io"
 	"os"
 	"time"
@@ -20,12 +21,12 @@ type ArchiveEntry struct {
 
 // ===== Public API =====
 
-func writeTarGz(archivePath string, entries []ArchiveEntry) error {
+func writeTarGz(archivePath string, entries []ArchiveEntry) (err error) {
 	file, err := os.Create(archivePath)
 	if err != nil {
 		return err
 	}
-	defer file.Close()
+	defer joinCloseError(&err, file)
 	compressed := gzip.NewWriter(file)
 	archive := tar.NewWriter(compressed)
 	for _, entry := range entries {
@@ -39,12 +40,12 @@ func writeTarGz(archivePath string, entries []ArchiveEntry) error {
 	return compressed.Close()
 }
 
-func writeZip(archivePath string, entries []ArchiveEntry) error {
+func writeZip(archivePath string, entries []ArchiveEntry) (err error) {
 	file, err := os.Create(archivePath)
 	if err != nil {
 		return err
 	}
-	defer file.Close()
+	defer joinCloseError(&err, file)
 	archive := zip.NewWriter(file)
 	for _, entry := range entries {
 		if err := streamZipEntry(archive, entry); err != nil {
@@ -56,12 +57,16 @@ func writeZip(archivePath string, entries []ArchiveEntry) error {
 
 // ===== Internal =====
 
-func streamTarEntry(archive *tar.Writer, entry ArchiveEntry) error {
+func joinCloseError(err *error, closer io.Closer) {
+	*err = errors.Join(*err, closer.Close())
+}
+
+func streamTarEntry(archive *tar.Writer, entry ArchiveEntry) (err error) {
 	reader, size, err := openEntry(entry)
 	if err != nil {
 		return err
 	}
-	defer reader.Close()
+	defer joinCloseError(&err, reader)
 	header := &tar.Header{Name: entry.Name, Mode: entry.Mode, Size: size, ModTime: time.Now(), Typeflag: tar.TypeReg}
 	if err := archive.WriteHeader(header); err != nil {
 		return err
@@ -70,12 +75,12 @@ func streamTarEntry(archive *tar.Writer, entry ArchiveEntry) error {
 	return err
 }
 
-func streamZipEntry(archive *zip.Writer, entry ArchiveEntry) error {
+func streamZipEntry(archive *zip.Writer, entry ArchiveEntry) (err error) {
 	reader, _, err := openEntry(entry)
 	if err != nil {
 		return err
 	}
-	defer reader.Close()
+	defer joinCloseError(&err, reader)
 	header := &zip.FileHeader{Name: entry.Name, Method: zip.Deflate, Modified: time.Now()}
 	header.SetMode(os.FileMode(entry.Mode))
 	writer, err := archive.CreateHeader(header)

@@ -102,7 +102,10 @@ func appendModuleLicenses(text *bytes.Buffer, module BuildModule) error {
 		if err != nil {
 			return err
 		}
-		relative, _ := filepath.Rel(module.Dir, path)
+		relative, err := filepath.Rel(module.Dir, path)
+		if err != nil {
+			return err
+		}
 		fmt.Fprintf(text, "\n\n==== %s: %s ====\n\n%s", module.Title(), filepath.ToSlash(relative), bytes.TrimSpace(content))
 	}
 	return nil
