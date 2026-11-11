@@ -1,6 +1,7 @@
 package audio
 
 import (
+	"github.com/ajkula/ajkurig/mathx"
 	"math"
 
 	"github.com/ajkula/ajkurig/rng"
@@ -104,9 +105,9 @@ const (
 )
 
 var waveformSamplers = [waveformCount]waveformSampler{
-	WaveSquare:   func(phase, duty, _ float32) float32 { return 1 - 2*boolToFloat(phase >= duty) },
+	WaveSquare:   func(phase, duty, _ float32) float32 { return 1 - 2*mathx.BoolToFloat(phase >= duty) },
 	WaveSaw:      func(phase, _, _ float32) float32 { return 2*phase - 1 },
-	WaveTriangle: func(phase, _, _ float32) float32 { return 4*abs(phase-0.5) - 1 },
+	WaveTriangle: func(phase, _, _ float32) float32 { return 4*mathx.Abs(phase-0.5) - 1 },
 	WaveSine:     func(phase, _, _ float32) float32 { return sineOfPhase(phase) },
 	WaveNoise:    func(_, _, noise float32) float32 { return noise },
 }
@@ -127,8 +128,8 @@ func (v *Voice) Start(settings VoiceSettings, seed uint32) {
 		random:       rng.New(seed),
 	}
 	v.startUnison()
-	v.Settings.Duty = settings.Duty + 0.5*boolToFloat(settings.Duty == 0)
-	panAngle := float64(clamp(settings.Pan, 0, 1)) * math.Pi / 2
+	v.Settings.Duty = settings.Duty + 0.5*mathx.BoolToFloat(settings.Duty == 0)
+	panAngle := float64(mathx.Clamp(settings.Pan, 0, 1)) * math.Pi / 2
 	v.GainLeft = float32(math.Cos(panAngle)) * panLawCenterGain
 	v.GainRight = float32(math.Sin(panAngle)) * panLawCenterGain
 }
@@ -151,7 +152,7 @@ func (v *Voice) Render() (float32, float32) {
 	v.advancePhase()
 	raw := v.oscillate() + v.clickNoise()
 	filtered := v.filter(raw)
-	driven := filtered * (1 + v.Settings.Drive) / (1 + abs(filtered)*v.Settings.Drive)
+	driven := filtered * (1 + v.Settings.Drive) / (1 + mathx.Abs(filtered)*v.Settings.Drive)
 	value := v.crush(v.fold(driven)) * amplitude * v.Settings.Volume
 	v.Age += sampleSeconds
 	v.Frequency *= v.SlideFactor
@@ -165,15 +166,15 @@ func NoteFrequency(note int) float32 {
 // ===== Internal =====
 
 func (v *Voice) startUnison() {
-	requested := clampInt(int(v.Settings.Unison), 1, maximumUnison) - 1
-	v.UnisonCount = max(boolToIndex(v.Settings.Detune != 0), requested)
+	requested := mathx.ClampInt(int(v.Settings.Unison), 1, maximumUnison) - 1
+	v.UnisonCount = max(mathx.BoolToIndex(v.Settings.Detune != 0), requested)
 	isSpread := v.UnisonCount > 1
 	for index := range v.UnisonCount {
 		position := float32(index)/float32(max(1, v.UnisonCount-1))*2 - 1
-		offset := v.Settings.Detune * [2]float32{1, position}[boolToIndex(isSpread)]
+		offset := v.Settings.Detune * [2]float32{1, position}[mathx.BoolToIndex(isSpread)]
 		v.UnisonRatios[index] = float32(math.Exp2(float64(offset) / 12))
 	}
-	for index := range v.UnisonCount * boolToIndex(isSpread) {
+	for index := range v.UnisonCount * mathx.BoolToIndex(isSpread) {
 		v.UnisonPhases[index] = v.random.Float()
 	}
 }
@@ -202,7 +203,7 @@ func (v *Voice) filter(raw float32) float32 {
 	if v.Settings.Resonance == 0 {
 		return v.FilterState
 	}
-	frequency := clamp(1-closing, minimumSvfFrequency, maximumSvfFrequency)
+	frequency := mathx.Clamp(1-closing, minimumSvfFrequency, maximumSvfFrequency)
 	damping := 1 - v.Settings.Resonance*resonanceDamping
 	high := raw - v.ResonantLow - damping*v.ResonantBand
 	v.ResonantBand += frequency * high
@@ -214,9 +215,9 @@ func (v *Voice) filterSweep() float32 {
 	if v.Settings.Sweep == 0 {
 		return 0
 	}
-	sweepTime := v.Settings.SweepTime + defaultSweepTime*boolToFloat(v.Settings.SweepTime == 0)
+	sweepTime := v.Settings.SweepTime + defaultSweepTime*mathx.BoolToFloat(v.Settings.SweepTime == 0)
 	sweep := v.Settings.Sweep * float32(math.Exp(float64(-v.Age/sweepTime)))
-	return clamp(sweep, v.Settings.Filter-0.999, v.Settings.Filter)
+	return mathx.Clamp(sweep, v.Settings.Filter-0.999, v.Settings.Filter)
 }
 
 func (v *Voice) pitchPunch() float32 {
@@ -266,13 +267,13 @@ func (v *Voice) advancePhase() {
 	hasWrapped := v.Phase >= 1
 	v.Phase = wrapPhase(v.Phase)
 	freshNoise := v.random.Float()*2 - 1
-	v.NoiseValue += (freshNoise - v.NoiseValue) * boolToFloat(hasWrapped)
+	v.NoiseValue += (freshNoise - v.NoiseValue) * mathx.BoolToFloat(hasWrapped)
 }
 
 func (v *Voice) heldLevel() float32 {
 	envelope := &v.Settings.Envelope
 	attackLevel := min(1, v.Age/max(envelope.Attack, minimumEnvelopeTime))
-	decayProgress := clamp((v.Age-envelope.Attack)/max(envelope.Decay, minimumEnvelopeTime), 0, 1)
+	decayProgress := mathx.Clamp((v.Age-envelope.Attack)/max(envelope.Decay, minimumEnvelopeTime), 0, 1)
 	return attackLevel * (1 - decayProgress*(1-envelope.Sustain))
 }
 

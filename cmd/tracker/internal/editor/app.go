@@ -2,6 +2,7 @@ package editor
 
 import (
 	"fmt"
+	"github.com/ajkula/ajkurig/mathx"
 	"image/color"
 	"os"
 	"path/filepath"
@@ -310,7 +311,7 @@ func (e *Editor) play() {
 	e.refreshIfStale()
 	e.isStale = true
 	e.refreshIfStale()
-	startOrder := [2]int{0, e.orderSelection}[boolToIndex(e.isSongMode)]
+	startOrder := [2]int{0, e.orderSelection}[mathx.BoolToIndex(e.isSongMode)]
 	e.preview.Play(startOrder, 0)
 	e.isPlaying = true
 }
@@ -355,8 +356,8 @@ func (e *Editor) notify(message string, tint color.Color) {
 }
 
 func (e *Editor) windowTitle() string {
-	name := [2]string{filepath.Base(e.path), "untitled"}[boolToIndex(e.path == "")]
-	return fmt.Sprintf("ajkurig Tracker - %s%s", name, [2]string{"", " *"}[boolToIndex(e.isDirty)])
+	name := [2]string{filepath.Base(e.path), "untitled"}[mathx.BoolToIndex(e.path == "")]
+	return fmt.Sprintf("ajkurig Tracker - %s%s", name, [2]string{"", " *"}[mathx.BoolToIndex(e.isDirty)])
 }
 
 func (e *Editor) audition(note int) {

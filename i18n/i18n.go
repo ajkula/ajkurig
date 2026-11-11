@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/ajkula/ajkurig/mathx"
 	"io/fs"
 	"os"
 	"path/filepath"
@@ -73,7 +74,7 @@ func Languages() []Language {
 
 func Use(code string) bool {
 	language, exists := languages[code]
-	current = [2]*Language{fallback, language}[boolToIndex(exists)]
+	current = [2]*Language{fallback, language}[mathx.BoolToIndex(exists)]
 	return exists
 }
 
@@ -201,8 +202,8 @@ func register(data []byte) error {
 }
 
 func mergeLanguage(language, addition *Language) {
-	language.Name = [2]string{language.Name, addition.Name}[boolToIndex(addition.Name != "")]
-	language.Script = [2]string{language.Script, addition.Script}[boolToIndex(addition.Script != "")]
+	language.Name = [2]string{language.Name, addition.Name}[mathx.BoolToIndex(addition.Name != "")]
+	language.Script = [2]string{language.Script, addition.Script}[mathx.BoolToIndex(addition.Script != "")]
 	for key, text := range addition.Strings {
 		language.Strings[key] = text
 	}
@@ -219,16 +220,9 @@ func matchLocale(locale string) string {
 }
 
 func compareLanguages(a, b Language) int {
-	order := boolToIndex(a.Code != FallbackCode) - boolToIndex(b.Code != FallbackCode)
+	order := mathx.BoolToIndex(a.Code != FallbackCode) - mathx.BoolToIndex(b.Code != FallbackCode)
 	if order != 0 {
 		return order
 	}
 	return strings.Compare(a.Code, b.Code)
-}
-
-func boolToIndex(value bool) int {
-	if value {
-		return 1
-	}
-	return 0
 }

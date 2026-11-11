@@ -3,6 +3,7 @@ package audio
 import (
 	"encoding/binary"
 	"fmt"
+	"github.com/ajkula/ajkurig/mathx"
 	"math"
 	"os"
 	"path/filepath"
@@ -98,7 +99,7 @@ func TestEachTensionStepAddsADeeperVoice(t *testing.T) {
 	song := exampleSongs()[0]
 	tensionChannels := []int{}
 	for channel, layer := range song.Layers {
-		tensionChannels = appendIf(tensionChannels, channel, layer.SignalName == "tension")
+		tensionChannels = mathx.AppendIf(tensionChannels, channel, layer.SignalName == "tension")
 	}
 	if len(tensionChannels) != tensionMaximum {
 		t.Fatalf("%d tension layers, want %d", len(tensionChannels), tensionMaximum)
@@ -125,7 +126,7 @@ func TestEveryFrameworkSoundProducesSound(t *testing.T) {
 		peak := float32(0)
 		for range sampleRate / 2 {
 			left, right := engine.renderEffects()
-			peak = max(peak, abs(left), abs(right))
+			peak = max(peak, mathx.Abs(left), mathx.Abs(right))
 		}
 		if peak < 0.01 || peak > 2 {
 			t.Fatalf("sound %s peak %.3f out of range", bank.Definition(id).Name, peak)
@@ -160,7 +161,7 @@ func TestMusicToggleKeepsSoundEffects(t *testing.T) {
 	peak := float32(0)
 	for range sampleRate / 10 {
 		left, right := engine.renderFrame()
-		peak = max(peak, abs(left), abs(right))
+		peak = max(peak, mathx.Abs(left), mathx.Abs(right))
 	}
 	if peak < 0.01 {
 		t.Fatalf("sound effects silenced by the music toggle (peak %.3f)", peak)
@@ -177,13 +178,13 @@ func TestEmptyPlaylistSilencesMusicButNotEffects(t *testing.T) {
 	musicPeak := float32(0)
 	for range sampleRate {
 		left, right := engine.renderFrame()
-		musicPeak = max(musicPeak, abs(left), abs(right))
+		musicPeak = max(musicPeak, mathx.Abs(left), mathx.Abs(right))
 	}
 	engine.startSound(&engine.sounds[SoundMenuSelect])
 	effectPeak := float32(0)
 	for range sampleRate / 10 {
 		left, right := engine.renderFrame()
-		effectPeak = max(effectPeak, abs(left), abs(right))
+		effectPeak = max(effectPeak, mathx.Abs(left), mathx.Abs(right))
 	}
 	if musicPeak > 0.0001 || effectPeak < 0.01 {
 		t.Fatalf("empty playlist: music peak %.4f (want silence), effects peak %.3f (want audible)", musicPeak, effectPeak)
@@ -236,7 +237,7 @@ func TestExtraLayersPlayChordTonesInEverySong(t *testing.T) {
 			chords := DetectChords(pattern.Rows)
 			for rowIndex, row := range pattern.Rows {
 				for channel, cell := range row {
-					notesPerChannel[channel] += boolToIndex(cell.Note >= 0)
+					notesPerChannel[channel] += mathx.BoolToIndex(cell.Note >= 0)
 				}
 				for _, channel := range tonalChannels {
 					cell := row[channel]
@@ -263,7 +264,7 @@ func TestSongCrossfadeStaysClean(t *testing.T) {
 		engine.applyControls()
 		for range songCrossfadeSeconds * sampleRate / 4 {
 			left, right := engine.renderMusic()
-			if math.IsNaN(float64(left)) || math.IsNaN(float64(right)) || abs(left) > 4 {
+			if math.IsNaN(float64(left)) || math.IsNaN(float64(right)) || mathx.Abs(left) > 4 {
 				t.Fatalf("bad sample while crossfading into song %d", index)
 			}
 		}
@@ -352,7 +353,7 @@ func TestPunchyVoiceSettingsShapeTheSound(t *testing.T) {
 			t.Errorf("%s did not change the sound", name)
 		}
 		for _, sample := range samples {
-			if math.IsNaN(float64(sample)) || abs(sample) > 4 {
+			if math.IsNaN(float64(sample)) || mathx.Abs(sample) > 4 {
 				t.Fatalf("%s produced an unstable sample %v", name, sample)
 			}
 		}
@@ -379,8 +380,8 @@ C-3 01 ... | A-3 02 ...
 		_, right := tracker.Render()
 		isEarly := sample > sampleRate/50 && sample < sampleRate/10
 		isLate := sample > sampleRate*3/10
-		early = max(early, abs(right)*boolToFloat(isEarly))
-		late = max(late, abs(right)*boolToFloat(isLate))
+		early = max(early, mathx.Abs(right)*mathx.BoolToFloat(isEarly))
+		late = max(late, mathx.Abs(right)*mathx.BoolToFloat(isLate))
 	}
 	if early >= late*0.6 {
 		t.Fatalf("the pad was not ducked after the kick: early %.3f late %.3f", early, late)
@@ -450,7 +451,7 @@ func renderStatistics(t *testing.T, tracker *Tracker, samples int) (float32, flo
 		if math.IsNaN(float64(mixedLeft)) || math.IsNaN(float64(mixedRight)) {
 			t.Fatalf("NaN in music output")
 		}
-		peak = max(peak, abs(mixedLeft), abs(mixedRight))
+		peak = max(peak, mathx.Abs(mixedLeft), mathx.Abs(mixedRight))
 		sumSquares += float64(mixedLeft*mixedLeft + mixedRight*mixedRight)
 	}
 	return peak, float32(math.Sqrt(sumSquares / float64(2*samples)))
@@ -469,7 +470,7 @@ func renderVoice(settings VoiceSettings) [4096]float32 {
 func peakOf(buffer []byte) float32 {
 	peak := float32(0)
 	for offset := 0; offset+4 <= len(buffer); offset += 4 {
-		peak = max(peak, abs(math.Float32frombits(binary.LittleEndian.Uint32(buffer[offset:]))))
+		peak = max(peak, mathx.Abs(math.Float32frombits(binary.LittleEndian.Uint32(buffer[offset:]))))
 	}
 	return peak
 }

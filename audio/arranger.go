@@ -1,5 +1,7 @@
 package audio
 
+import "github.com/ajkula/ajkurig/mathx"
+
 // ===== Types =====
 
 type ChordTones struct {
@@ -65,7 +67,7 @@ func ArrangeExtraLayers(song *Song) {
 
 func (c ChordTones) Tone(step, octave int) int {
 	offsets := [3]int{0, c.Third, c.Fifth}
-	return octave*12 + positiveModulo(c.Root, 12) + offsets[positiveModulo(step, 3)] + 12*floorDivide(step, 3)
+	return octave*12 + mathx.WrapIndex(c.Root, 12) + offsets[mathx.WrapIndex(step, 3)] + 12*mathx.FloorDivide(step, 3)
 }
 
 func DetectChords(rows [][TrackerChannels]TrackerCell) []ChordTones {
@@ -92,7 +94,7 @@ func arrangeIfEmpty(rows [][TrackerChannels]TrackerCell, chords []ChordTones, so
 func firstChord(rows [][TrackerChannels]TrackerCell) ChordTones {
 	fallback := ChordTones{Third: defaultMinorThird, Fifth: defaultFifth}
 	for _, row := range rows {
-		fallback.Root += (row[ChannelBass].Note - fallback.Root) * boolToIndex(row[ChannelBass].Note >= 0 && fallback.Root == 0)
+		fallback.Root += (row[ChannelBass].Note - fallback.Root) * mathx.BoolToIndex(row[ChannelBass].Note >= 0 && fallback.Root == 0)
 	}
 	for _, row := range rows {
 		chord := chordFromCell(row[ChannelChords], fallback)
@@ -114,12 +116,12 @@ func chordFromCell(cell TrackerCell, current ChordTones) ChordTones {
 func arrangeShaker(rows [][TrackerChannels]TrackerCell, _ []ChordTones, _ *Song) {
 	quietByParity := [2]int{}
 	for index, row := range rows {
-		quietByParity[index%2] += boolToIndex(isQuietHihat(row[ChannelHihat]))
+		quietByParity[index%2] += mathx.BoolToIndex(isQuietHihat(row[ChannelHihat]))
 	}
-	parity := boolToIndex(quietByParity[1] >= quietByParity[0])
+	parity := mathx.BoolToIndex(quietByParity[1] >= quietByParity[0])
 	for index := range rows {
 		volumes := [2]int{shakerSoftVolume, shakerAccentVolume}
-		cell := TrackerCell{Note: note("C-9"), Instrument: InstrumentShaker, Effect: effectVolume, Parameter: volumes[boolToIndex(index%4 >= 2)]}
+		cell := TrackerCell{Note: note("C-9"), Instrument: InstrumentShaker, Effect: effectVolume, Parameter: volumes[mathx.BoolToIndex(index%4 >= 2)]}
 		setRowCellIf(rows, index, ChannelShaker, cell, index%2 == parity && isQuietHihat(rows[index][ChannelHihat]))
 	}
 }
@@ -132,7 +134,7 @@ func isQuietHihat(hihat TrackerCell) bool {
 func arrangeClap(rows [][TrackerChannels]TrackerCell, _ []ChordTones, _ *Song) {
 	snareRows := 0
 	for _, row := range rows {
-		snareRows += boolToIndex(isSnareCell(row[ChannelDrums]))
+		snareRows += mathx.BoolToIndex(isSnareCell(row[ChannelDrums]))
 	}
 	hasSnare := snareRows > 0
 	for index := range rows {
@@ -156,9 +158,9 @@ func arrangePad(rows [][TrackerChannels]TrackerCell, chords []ChordTones, _ *Son
 }
 
 func arrangePluck(rows [][TrackerChannels]TrackerCell, chords []ChordTones, song *Song) {
-	spacing := 2 + 2*boolToIndex(song.Tempo < slowSongTempo)
+	spacing := 2 + 2*mathx.BoolToIndex(song.Tempo < slowSongTempo)
 	for index := 0; index < len(rows); index += spacing {
-		step := pluckChordSteps[(index/spacing)%len(pluckChordSteps)] + 3*boolToIndex(index%8 == 4)
+		step := pluckChordSteps[(index/spacing)%len(pluckChordSteps)] + 3*mathx.BoolToIndex(index%8 == 4)
 		rows[index][ChannelPluck] = TrackerCell{Note: chords[index].Tone(step, pluckOctave), Instrument: InstrumentPluck}
 	}
 }
@@ -184,14 +186,14 @@ func chordToneBelow(melodyNote int, chord ChordTones) int {
 	best := melodyNote - harmonyLowestDrop
 	for drop := 1; drop <= harmonyLowestDrop; drop++ {
 		candidate := melodyNote - drop
-		best = candidate + (best-candidate)*boolToIndex(best > candidate || !chord.Contains(candidate))
+		best = candidate + (best-candidate)*mathx.BoolToIndex(best > candidate || !chord.Contains(candidate))
 	}
 	return best
 }
 
 func (c ChordTones) Contains(midiNote int) bool {
-	interval := positiveModulo(midiNote-c.Root, 12)
-	return interval == 0 || interval == positiveModulo(c.Third, 12) || interval == positiveModulo(c.Fifth, 12)
+	interval := mathx.WrapIndex(midiNote-c.Root, 12)
+	return interval == 0 || interval == mathx.WrapIndex(c.Third, 12) || interval == mathx.WrapIndex(c.Fifth, 12)
 }
 
 func setRowCellIf(rows [][TrackerChannels]TrackerCell, row, channel int, cell TrackerCell, shouldSet bool) {

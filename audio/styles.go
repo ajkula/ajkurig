@@ -14,6 +14,6 @@ var ExampleStyles = []MusicStyle{
 		KickRhythm: "x...x...x...x...", SnareRhythm: "....x.......x..x", HihatRhythm: "XxXxXxXxXxXxXxXx",
 		BassRhythm: "x.xox.xox.xox.xf", ChordRhythm: "x.x...x.x.x...x.", MelodyRhythm: "x.xx.x..x.xx.x..",
 		LeadWaveform: WaveSquare, LeadDuty: 0.125, BassWaveform: WaveSquare, ChordDuty: 0.4, BellWaveform: WaveSquare, MelodyOctave: 5,
-		BellsDescend: true,
+		AreBellsDescending: true,
 	},
 }

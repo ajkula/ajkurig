@@ -1,6 +1,7 @@
 package song
 
 import (
+	"github.com/ajkula/ajkurig/mathx"
 	"slices"
 )
 
@@ -237,7 +238,7 @@ func (d *Document) SignalChoices() []string {
 	choices := slices.Clone(DefaultSignals)
 	for _, layer := range d.Layers {
 		isNew := layer.Signal != "" && !slices.Contains(choices, layer.Signal)
-		choices = appendIf(choices, layer.Signal, isNew)
+		choices = mathx.AppendIf(choices, layer.Signal, isNew)
 	}
 	return choices
 }
@@ -249,7 +250,7 @@ func (d *Document) SignalNames() []string {
 func (d *Document) SignalMaximum(name string) float32 {
 	maximum := max(1, defaultSignalMaximums[name])
 	for _, layer := range d.Layers {
-		maximum = max(maximum, layer.Threshold*boolToFloat(layer.Signal == name))
+		maximum = max(maximum, layer.Threshold*mathx.BoolToFloat(layer.Signal == name))
 	}
 	return maximum
 }
@@ -271,17 +272,6 @@ func (d *Document) isSignalUsed(name string) bool {
 		}
 	}
 	return false
-}
-
-func appendIf[T any](items []T, item T, shouldAppend bool) []T {
-	if !shouldAppend {
-		return items
-	}
-	return append(items, item)
-}
-
-func boolToFloat(value bool) float32 {
-	return float32(boolToIndex(value))
 }
 
 func cloneProperties(properties map[string]float32) map[string]float32 {

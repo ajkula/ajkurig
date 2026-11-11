@@ -3,6 +3,7 @@ package audio
 import (
 	"encoding/binary"
 	"fmt"
+	"github.com/ajkula/ajkurig/mathx"
 	"math"
 	"sync"
 	"time"
@@ -314,9 +315,9 @@ func (e *Engine) installTracker(incoming *Tracker, isCrossfading bool) {
 	if incoming == nil {
 		return
 	}
-	e.fadingTracker = [2]*Tracker{nil, e.tracker}[boolToIndex(isCrossfading)]
+	e.fadingTracker = [2]*Tracker{nil, e.tracker}[mathx.BoolToIndex(isCrossfading)]
 	e.tracker = incoming
-	e.crossfade = [2]float32{1, 0}[boolToIndex(isCrossfading)]
+	e.crossfade = [2]float32{1, 0}[mathx.BoolToIndex(isCrossfading)]
 }
 
 func (e *Engine) publishState() {
@@ -359,7 +360,7 @@ func (e *Engine) startSound(definition *SoundDefinition) {
 func (e *Engine) renderFrame() (float32, float32) {
 	musicLeft, musicRight := e.renderMusic()
 	effectsLeft, effectsRight := e.renderEffects()
-	musicGain := e.musicVolume * boolToFloat(!e.isMusicMuted && !e.isPlaylistEmpty)
+	musicGain := e.musicVolume * mathx.BoolToFloat(!e.isMusicMuted && !e.isPlaylistEmpty)
 	return softClip(musicLeft*musicGain + effectsLeft*e.effectsVolume), softClip(musicRight*musicGain + effectsRight*e.effectsVolume)
 }
 

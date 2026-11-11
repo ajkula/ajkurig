@@ -1,6 +1,7 @@
 package editor
 
 import (
+	"github.com/ajkula/ajkurig/mathx"
 	"image/color"
 
 	"github.com/hajimehoshi/ebiten/v2/text/v2"
@@ -57,18 +58,18 @@ func (e *Editor) whiteKey(octave, index, semitone int) int {
 	rect := Rect{pianoLeft + float32(octave*whiteKeysPerOct+index)*whiteKeyWidth, pianoTop, whiteKeyWidth - 1, pianoHeight}
 	note := (e.octave+octave)*12 + semitone
 	isHot := e.ui.isHot(rect)
-	e.ui.Fill(rect, [2]color.Color{whiteKeyColor, colorAccent}[boolToIndex(isHot)])
-	label := [2]string{"", song.FormatNote(note)}[boolToIndex(semitone == 0)]
+	e.ui.Fill(rect, [2]color.Color{whiteKeyColor, colorAccent}[mathx.BoolToIndex(isHot)])
+	label := [2]string{"", song.FormatNote(note)}[mathx.BoolToIndex(semitone == 0)]
 	e.ui.Text(rect.X+4, rect.Y+rect.H-15, label, e.ui.Small, colorBackground, text.AlignStart)
 	e.ui.setHintIf("Click to write this note at the cursor and hear it (the computer keyboard works too)", isHot)
-	return [2]int{-1, note}[boolToIndex(isHot && e.ui.IsClickFree())]
+	return [2]int{-1, note}[mathx.BoolToIndex(isHot && e.ui.IsClickFree())]
 }
 
 func (e *Editor) blackKeyOver(octave, semitone, afterWhite, clicked int) int {
 	x := pianoLeft + float32(octave*whiteKeysPerOct+afterWhite+1)*whiteKeyWidth - whiteKeyWidth*blackKeyWidth/2
 	rect := Rect{x, pianoTop, whiteKeyWidth * blackKeyWidth, pianoHeight * blackKeyHeight}
 	isHot := e.ui.isHot(rect)
-	e.ui.Fill(rect, [2]color.Color{blackKeyColor, colorAccent}[boolToIndex(isHot)])
+	e.ui.Fill(rect, [2]color.Color{blackKeyColor, colorAccent}[mathx.BoolToIndex(isHot)])
 	if !isHot || !e.ui.IsClickFree() {
 		return clicked
 	}

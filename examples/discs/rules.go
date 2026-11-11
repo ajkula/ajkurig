@@ -64,7 +64,7 @@ var materials = []world.Material{
 	MaterialDirt:  {Name: "Dirt", BaseColor: colorx.Bytes(colorx.RaisinBlack), ColorVariation: 8},
 	MaterialAsh:   {Name: "Ash", BaseColor: colorx.Bytes(colorx.Scale(colorx.PaleSilver, 0.25)), ColorVariation: 8, LifetimeMinTicks: 200, LifetimeMaxTicks: 400},
 	MaterialOil:   {Name: "Oil", BaseColor: colorx.Bytes(colorx.Scale(colorx.BlushingPurple, 0.35)), ColorVariation: 14, LifetimeMinTicks: 600, LifetimeMaxTicks: 900, Tag: uint32(ElementOil)},
-	MaterialFire:  {Name: "Fire", BaseColor: colorx.Bytes(colorx.Frostbite), ColorVariation: 60, LifetimeMinTicks: 25, LifetimeMaxTicks: 50, Emits: StimulusHeat, Glows: true, Tag: uint32(ElementFire)},
+	MaterialFire:  {Name: "Fire", BaseColor: colorx.Bytes(colorx.Frostbite), ColorVariation: 60, LifetimeMinTicks: 25, LifetimeMaxTicks: 50, Emits: StimulusHeat, IsGlowing: true, Tag: uint32(ElementFire)},
 	MaterialIce:   {Name: "Ice", BaseColor: colorx.Bytes(colorx.Scale(colorx.ElectricBlue, 0.8)), ColorVariation: 14, LifetimeMinTicks: 150, LifetimeMaxTicks: 250, Tag: uint32(ElementFrost)},
 	MaterialWater: {Name: "Water", BaseColor: colorx.Bytes(colorx.Scale(colorx.ElectricBlue, 0.4)), ColorVariation: 12},
 }

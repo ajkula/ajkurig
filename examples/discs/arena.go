@@ -43,7 +43,7 @@ func (a *Arena) Update(frame *rig.Frame) {
 	events := w.Weather.Update(frame.Delta, &w.Random)
 	w.PlaySoundIf(w.Weather.Definition().StartSound, events.HasStart)
 	w.SayIf(TopicHeatwave, events.HasStart && events.Started == WeatherHeatwave)
-	a.strikeIf(events.Strike)
+	a.strikeIf(events.HasStrike)
 	if frame.Tick%GroundTickTicks != 0 {
 		return
 	}

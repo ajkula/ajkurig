@@ -50,10 +50,10 @@ type WeatherTiming struct {
 }
 
 type WeatherEvents struct {
-	Started  WeatherID
-	HasStart bool
-	Ended    bool
-	Strike   bool
+	Started   WeatherID
+	HasStart  bool
+	HasEnded  bool
+	HasStrike bool
 }
 
 type Weather struct {
@@ -119,7 +119,7 @@ func (w *Weather) Start(kind WeatherID) {
 
 func (w *Weather) Update(deltaSeconds float32, random *rng.Random) WeatherEvents {
 	events := w.Advance(deltaSeconds, random)
-	events.Strike = w.RollStrike(deltaSeconds, random)
+	events.HasStrike = w.RollStrike(deltaSeconds, random)
 	return events
 }
 
@@ -136,7 +136,7 @@ func (w *Weather) Advance(deltaSeconds float32, random *rng.Random) WeatherEvent
 	isOver := w.Kind != WeatherClear && w.ActiveSeconds <= 0
 	if isOver {
 		w.Reset(random)
-		events.Ended = true
+		events.HasEnded = true
 	}
 	return events
 }

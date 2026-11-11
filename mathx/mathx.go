@@ -60,6 +60,10 @@ func Cos(angle float32) float32 {
 	return float32(math.Cos(float64(angle)))
 }
 
+func Acos(value float32) float32 {
+	return float32(math.Acos(float64(value)))
+}
+
 func Atan2(y, x float32) float32 {
 	return float32(math.Atan2(float64(y), float64(x)))
 }

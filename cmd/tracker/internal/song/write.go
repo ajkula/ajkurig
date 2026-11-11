@@ -2,6 +2,7 @@ package song
 
 import (
 	"fmt"
+	"github.com/ajkula/ajkurig/mathx"
 	"strconv"
 	"strings"
 )
@@ -50,7 +51,7 @@ func PlaybackSource(document *Document, options PlaybackOptions) string {
 	}
 	layers := document.Layers
 	for channel, isMuted := range options.Muted {
-		layers[channel] = [2]Layer{layers[channel], {Signal: mutedSignal, Threshold: mutedThreshold}}[boolToIndex(isMuted)]
+		layers[channel] = [2]Layer{layers[channel], {Signal: mutedSignal, Threshold: mutedThreshold}}[mathx.BoolToIndex(isMuted)]
 	}
 	return document.render(order, layers)
 }
@@ -103,7 +104,7 @@ func (d *Document) render(order []int, layers [Channels]Layer) string {
 	}
 	builder.WriteString("\norder " + joinInts(order) + "\n")
 	restart := clampRestart(d.Restart, len(order))
-	builder.WriteString([2]string{"", fmt.Sprintf("restart %d\n", restart)}[boolToIndex(restart > 0)])
+	builder.WriteString([2]string{"", fmt.Sprintf("restart %d\n", restart)}[mathx.BoolToIndex(restart > 0)])
 	for _, pattern := range d.Patterns {
 		d.writePattern(&builder, pattern)
 	}
@@ -148,7 +149,7 @@ func (d *Document) writePattern(builder *strings.Builder, pattern *Pattern) {
 
 func safeWord(text string) string {
 	word := strings.Join(strings.Fields(strings.ReplaceAll(text, "#", "")), "_")
-	return [2]string{word, "unnamed"}[boolToIndex(word == "")]
+	return [2]string{word, "unnamed"}[mathx.BoolToIndex(word == "")]
 }
 
 func safeLine(text string) string {
@@ -173,11 +174,4 @@ func joinInts(values []int) string {
 
 func formatFloat(value float32) string {
 	return strconv.FormatFloat(float64(value), 'f', -1, 32)
-}
-
-func boolToIndex(value bool) int {
-	if value {
-		return 1
-	}
-	return 0
 }

@@ -1,6 +1,9 @@
 package audio
 
-import "github.com/ajkula/ajkurig/rng"
+import (
+	"github.com/ajkula/ajkurig/mathx"
+	"github.com/ajkula/ajkurig/rng"
+)
 
 // ===== Types =====
 
@@ -10,26 +13,26 @@ type InstrumentOverride struct {
 }
 
 type MusicStyle struct {
-	Name         string
-	Tempo        int
-	Speed        int
-	Tonic        int
-	Scale        []int
-	Progression  [4]int
-	KickRhythm   string
-	SnareRhythm  string
-	HihatRhythm  string
-	BassRhythm   string
-	ChordRhythm  string
-	MelodyRhythm string
-	LeadWaveform Waveform
-	LeadDuty     float32
-	BassWaveform Waveform
-	ChordDuty    float32
-	BellWaveform Waveform
-	MelodyOctave int
-	BellsDescend bool
-	Overrides    []InstrumentOverride
+	Name               string
+	Tempo              int
+	Speed              int
+	Tonic              int
+	Scale              []int
+	Progression        [4]int
+	KickRhythm         string
+	SnareRhythm        string
+	HihatRhythm        string
+	BassRhythm         string
+	ChordRhythm        string
+	MelodyRhythm       string
+	LeadWaveform       Waveform
+	LeadDuty           float32
+	BassWaveform       Waveform
+	ChordDuty          float32
+	BellWaveform       Waveform
+	MelodyOctave       int
+	AreBellsDescending bool
+	Overrides          []InstrumentOverride
 }
 
 type songComposer struct {
@@ -132,8 +135,8 @@ func (c *songComposer) composePattern(pattern int) {
 
 func (c *songComposer) degreeNote(degree, octave int) int {
 	scaleLength := len(c.style.Scale)
-	wrappedOctave := octave + floorDivide(degree, scaleLength)
-	return wrappedOctave*12 + c.style.Tonic + c.style.Scale[positiveModulo(degree, scaleLength)]
+	wrappedOctave := octave + mathx.FloorDivide(degree, scaleLength)
+	return wrappedOctave*12 + c.style.Tonic + c.style.Scale[mathx.WrapIndex(degree, scaleLength)]
 }
 
 func (c *songComposer) chordIntervals(degree int) (int, int) {
@@ -148,7 +151,7 @@ func (c *songComposer) writeDrums(rows [][TrackerChannels]TrackerCell) {
 		isSnare := c.style.SnareRhythm[row] == 'x'
 		notes := [3]int{NoteEmpty, note("C-3"), note("C-8")}
 		instruments := [3]int{0, InstrumentKick, InstrumentSnare}
-		choice := boolToIndex(isKick) + 2*boolToIndex(isSnare && !isKick)
+		choice := mathx.BoolToIndex(isKick) + 2*mathx.BoolToIndex(isSnare && !isKick)
 		rows[row][ChannelDrums] = TrackerCell{Note: notes[choice], Instrument: instruments[choice]}
 		volume, hasHihat := hihatVolumes[c.style.HihatRhythm[row]]
 		setRowCellIf(rows, row, ChannelHihat, TrackerCell{Note: note("C-9"), Instrument: InstrumentHihat, Effect: effectVolume, Parameter: volume}, hasHihat)
@@ -174,7 +177,7 @@ func (c *songComposer) writeChords(rows [][TrackerChannels]TrackerCell, degree i
 }
 
 func (c *songComposer) writeMelody(rows [][TrackerChannels]TrackerCell, degree int) {
-	current := degree + 7*boolToIndex(degree < 3)
+	current := degree + 7*mathx.BoolToIndex(degree < 3)
 	for row := range rows {
 		isNote := c.style.MelodyRhythm[row] == 'x' && !c.random.Chance(melodyDropChance)
 		current = c.nextMelodyDegree(current, degree, row)
@@ -187,14 +190,14 @@ func (c *songComposer) nextMelodyDegree(current, chordDegree, row int) int {
 	isDownbeat := row%8 == 0
 	chordTones := [3]int{chordDegree, chordDegree + 2, chordDegree + 4}
 	anchored := nearestDegree(current, chordTones)
-	walked := clampInt(current+steps[c.random.Below(len(steps))], melodyLowestDegree, melodyHighestDegree)
-	return walked + (anchored-walked)*boolToIndex(isDownbeat)
+	walked := mathx.ClampInt(current+steps[c.random.Below(len(steps))], melodyLowestDegree, melodyHighestDegree)
+	return walked + (anchored-walked)*mathx.BoolToIndex(isDownbeat)
 }
 
 func nearestDegree(current int, candidates [3]int) int {
 	best := candidates[0]
 	for _, candidate := range candidates {
-		best = candidate + (best-candidate)*boolToIndex(absInt(best-current) <= absInt(candidate-current))
+		best = candidate + (best-candidate)*mathx.BoolToIndex(mathx.AbsInt(best-current) <= mathx.AbsInt(candidate-current))
 	}
 	return best
 }
@@ -218,7 +221,7 @@ func (c *songComposer) writeBells(rows [][TrackerChannels]TrackerCell, degree in
 	tones := [4]int{degree, degree + 2, degree + 4, degree + 7}
 	for row := 0; row < composedRows; row += 2 {
 		step := (row / 2) % 4
-		step += (3 - 2*step) * boolToIndex(c.style.BellsDescend)
+		step += (3 - 2*step) * mathx.BoolToIndex(c.style.AreBellsDescending)
 		rows[row][ChannelBells] = TrackerCell{Note: c.degreeNote(tones[step], 6), Instrument: InstrumentBell}
 	}
 }
@@ -228,7 +231,7 @@ func (c *songComposer) writePulse(rows [][TrackerChannels]TrackerCell, degree in
 	for row := 0; row < composedRows; row += 2 {
 		isAccent := row%8 == 0
 		volumes := [2]int{pulseSoftVolume, pulseAccentVolume}
-		rows[row][ChannelPulse] = TrackerCell{Note: root, Instrument: InstrumentPulse, Effect: effectVolume, Parameter: volumes[boolToIndex(isAccent)]}
+		rows[row][ChannelPulse] = TrackerCell{Note: root, Instrument: InstrumentPulse, Effect: effectVolume, Parameter: volumes[mathx.BoolToIndex(isAccent)]}
 	}
 }
 

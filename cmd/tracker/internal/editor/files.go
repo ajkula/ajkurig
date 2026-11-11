@@ -2,6 +2,7 @@ package editor
 
 import (
 	"fmt"
+	"github.com/ajkula/ajkurig/mathx"
 	"os"
 	"path/filepath"
 	"slices"
@@ -76,7 +77,7 @@ func (e *Editor) openOpenOverlay() {
 func (e *Editor) openSaveOverlay() {
 	e.saveName = strings.TrimSuffix(filepath.Base(e.path), songExtension)
 	isTheme := filepath.Clean(e.path) == filepath.Clean(gameThemePath)
-	e.saveName = [2]string{e.saveName, safeFileName(e.document.Title)}[boolToIndex(e.path == "" || isTheme)]
+	e.saveName = [2]string{e.saveName, safeFileName(e.document.Title)}[mathx.BoolToIndex(e.path == "" || isTheme)]
 	e.isThemeArmed = false
 	e.overlay = OverlaySave
 }
@@ -139,7 +140,7 @@ func (e *Editor) layoutSave() {
 		e.saveAndClose(target)
 	}
 	themeLabels := [2]string{"Save as the game song", "Click again: this replaces the game's song file"}
-	if e.ui.Button(Rect{overlayLeft + 16, overlayTop + 150, overlayWidth - 32, 32}, themeLabels[boolToIndex(e.isThemeArmed)], e.isThemeArmed, gameThemePath+" (rebuild the game to hear it)") {
+	if e.ui.Button(Rect{overlayLeft + 16, overlayTop + 150, overlayWidth - 32, 32}, themeLabels[mathx.BoolToIndex(e.isThemeArmed)], e.isThemeArmed, gameThemePath+" (rebuild the game to hear it)") {
 		e.saveThemeIfArmed()
 	}
 	e.ui.Text(overlayLeft+16, overlayTop+200, "The file is checked by the game's own parser before it is written.", e.ui.Small, colorTextDim, text.AlignStart)
@@ -188,7 +189,7 @@ func listSongs() []string {
 	paths := make([]string, 0, len(entries))
 	for _, entry := range entries {
 		isSong := !entry.IsDir() && strings.EqualFold(filepath.Ext(entry.Name()), songExtension)
-		paths = appendIf(paths, filepath.Join(songsDirectory, entry.Name()), isSong)
+		paths = mathx.AppendIf(paths, filepath.Join(songsDirectory, entry.Name()), isSong)
 	}
 	slices.Sort(paths)
 	return paths
@@ -197,16 +198,9 @@ func listSongs() []string {
 func safeFileName(name string) string {
 	cleaned := strings.Map(func(character rune) rune {
 		isAllowed := character == '-' || character == '_' || character >= '0' && character <= '9' || character >= 'a' && character <= 'z' || character >= 'A' && character <= 'Z'
-		return [2]rune{'_', character}[boolToIndex(isAllowed)]
+		return [2]rune{'_', character}[mathx.BoolToIndex(isAllowed)]
 	}, strings.TrimSpace(name))
-	return [2]string{cleaned, "song"}[boolToIndex(cleaned == "")]
-}
-
-func appendIf[T any](items []T, item T, shouldAppend bool) []T {
-	if !shouldAppend {
-		return items
-	}
-	return append(items, item)
+	return [2]string{cleaned, "song"}[mathx.BoolToIndex(cleaned == "")]
 }
 
 func (e *Editor) layoutPresets() {

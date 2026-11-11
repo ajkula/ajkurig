@@ -2,6 +2,7 @@ package editor
 
 import (
 	"fmt"
+	"github.com/ajkula/ajkurig/mathx"
 	"image/color"
 	"strings"
 
@@ -184,9 +185,9 @@ func (u *UI) Label(rect Rect, message string, tint color.Color) {
 func (u *UI) Button(rect Rect, label string, isOn bool, hint string) bool {
 	isHot := u.isHot(rect) && !u.IsDragging()
 	backgrounds := [2]color.Color{colorButton, colorButtonHot}
-	background := [2]color.Color{backgrounds[boolToIndex(isHot)], colorAccentDim}[boolToIndex(isOn)]
+	background := [2]color.Color{backgrounds[mathx.BoolToIndex(isHot)], colorAccentDim}[mathx.BoolToIndex(isOn)]
 	u.Fill(rect, background)
-	u.Outline(rect, [2]color.Color{colorPanelLight, colorAccent}[boolToIndex(isOn)])
+	u.Outline(rect, [2]color.Color{colorPanelLight, colorAccent}[mathx.BoolToIndex(isOn)])
 	u.Text(rect.X+rect.W/2, rect.Y+(rect.H-fontSize)/2-2, label, u.Regular, colorText, text.AlignCenter)
 	u.setHintIf(hint, isHot)
 	isPressed := isHot && u.IsClickFree()
@@ -200,15 +201,15 @@ func (u *UI) Slider(id string, rect Rect, value *float32, minimum, maximum, step
 	u.setHintIf(hint, isHot)
 	previous := *value
 	if u.activeID == id {
-		ratio := clamp((u.MouseX-rect.X)/rect.W, 0, 1)
+		ratio := mathx.Clamp((u.MouseX-rect.X)/rect.W, 0, 1)
 		*value = snap(minimum+(maximum-minimum)*ratio, step)
 	}
 	if isHot && u.WheelY != 0 && !u.IsDragging() {
-		*value = clamp(snap(*value+step*sign(u.WheelY)*wheelStepScale(step), step), minimum, maximum)
+		*value = mathx.Clamp(snap(*value+step*sign(u.WheelY)*wheelStepScale(step), step), minimum, maximum)
 	}
-	ratio := clamp((*value-minimum)/(maximum-minimum), 0, 1)
+	ratio := mathx.Clamp((*value-minimum)/(maximum-minimum), 0, 1)
 	u.Fill(rect, colorPanelLight)
-	u.Fill(Rect{rect.X, rect.Y, rect.W * ratio, rect.H}, [2]color.Color{colorAccentDim, colorAccent}[boolToIndex(isHot || u.activeID == id)])
+	u.Fill(Rect{rect.X, rect.Y, rect.W * ratio, rect.H}, [2]color.Color{colorAccentDim, colorAccent}[mathx.BoolToIndex(isHot || u.activeID == id)])
 	u.Text(rect.X+rect.W/2, rect.Y+(rect.H-smallFontSize)/2-2, formatValue(*value, step), u.Small, colorText, text.AlignCenter)
 	return *value != previous
 }
@@ -222,8 +223,8 @@ func (u *UI) Stepper(rect Rect, label string, value *int, minimum, maximum int, 
 	isDown := u.Button(Rect{rect.X + labelWidth, rect.Y, buttonWidth, rect.H}, "-", false, hint)
 	isUp := u.Button(Rect{valueRect.X + valueRect.W, rect.Y, buttonWidth, rect.H}, "+", false, hint)
 	isHot := u.isHot(valueRect)
-	wheel := boolToIndex(isHot && u.WheelY > 0) - boolToIndex(isHot && u.WheelY < 0)
-	*value = min(max(*value+boolToIndex(isUp)-boolToIndex(isDown)+wheel, minimum), maximum)
+	wheel := mathx.BoolToIndex(isHot && u.WheelY > 0) - mathx.BoolToIndex(isHot && u.WheelY < 0)
+	*value = min(max(*value+mathx.BoolToIndex(isUp)-mathx.BoolToIndex(isDown)+wheel, minimum), maximum)
 	u.setHintIf(hint, isHot)
 	u.Fill(valueRect, colorPanelLight)
 	u.Text(valueRect.X+valueRect.W/2, rect.Y+(rect.H-fontSize)/2-2, fmt.Sprint(*value), u.Regular, colorAccent, text.AlignCenter)
@@ -238,9 +239,9 @@ func (u *UI) TextField(id string, rect Rect, value *string, maximumLength int, h
 		u.ConsumeClick()
 	}
 	isFocused := u.focusID == id
-	u.Fill(rect, [2]color.Color{colorPanelLight, colorButtonHot}[boolToIndex(isFocused)])
-	u.Outline(rect, [2]color.Color{colorPanelLight, colorAccent}[boolToIndex(isFocused)])
-	shown := [2]string{*value, u.focusText + caret()}[boolToIndex(isFocused)]
+	u.Fill(rect, [2]color.Color{colorPanelLight, colorButtonHot}[mathx.BoolToIndex(isFocused)])
+	u.Outline(rect, [2]color.Color{colorPanelLight, colorAccent}[mathx.BoolToIndex(isFocused)])
+	shown := [2]string{*value, u.focusText + caret()}[mathx.BoolToIndex(isFocused)]
 	u.Text(rect.X+textPadding, rect.Y+(rect.H-fontSize)/2-2, shown, u.Regular, colorText, text.AlignStart)
 	if !isFocused {
 		return false
@@ -379,18 +380,7 @@ func wheelStepScale(step float32) float32 {
 }
 
 func sign(value float32) float32 {
-	return float32(boolToIndex(value > 0) - boolToIndex(value < 0))
-}
-
-func clamp(value, minimum, maximum float32) float32 {
-	return min(max(value, minimum), maximum)
-}
-
-func boolToIndex(value bool) int {
-	if value {
-		return 1
-	}
-	return 0
+	return float32(mathx.BoolToIndex(value > 0) - mathx.BoolToIndex(value < 0))
 }
 
 func rgb(red, green, blue float32) color.NRGBA {

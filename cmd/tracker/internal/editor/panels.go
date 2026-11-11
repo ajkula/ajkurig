@@ -2,6 +2,7 @@ package editor
 
 import (
 	"fmt"
+	"github.com/ajkula/ajkurig/mathx"
 	"image/color"
 	"slices"
 
@@ -54,11 +55,11 @@ func (e *Editor) layoutToolbar() {
 	}
 	x += 12
 	playLabels := [2]string{"> Play", "# Stop"}
-	if e.ui.Button(Rect{x, 7, 80, 26}, playLabels[boolToIndex(e.isPlaying)], e.isPlaying, "Play / stop (Space)") {
+	if e.ui.Button(Rect{x, 7, 80, 26}, playLabels[mathx.BoolToIndex(e.isPlaying)], e.isPlaying, "Play / stop (Space)") {
 		e.togglePlayback()
 	}
 	modeLabels := [2]string{"Loop pattern", "Whole song"}
-	if e.ui.Button(Rect{x + 86, 7, 110, 26}, modeLabels[boolToIndex(e.isSongMode)], e.isSongMode, "Loop the current pattern, or play the order list (F6)") {
+	if e.ui.Button(Rect{x + 86, 7, 110, 26}, modeLabels[mathx.BoolToIndex(e.isSongMode)], e.isSongMode, "Loop the current pattern, or play the order list (F6)") {
 		e.toggleSongMode()
 	}
 	e.layoutToolbarFields(x + 212)
@@ -266,7 +267,7 @@ func (e *Editor) layoutPropertySlider(area Rect, index int, property song.Proper
 	y := area.Y + 34 + float32(row)*(controlHeight+controlGap)
 	instrument := e.document.InstrumentByID(e.instrument)
 	value, isSet := instrument.Properties[property.Name]
-	labelColor := [2]color.Color{colorTextDim, colorText}[boolToIndex(isSet)]
+	labelColor := [2]color.Color{colorTextDim, colorText}[mathx.BoolToIndex(isSet)]
 	e.ui.Label(Rect{x, y, propertyLabelWidth, controlHeight}, property.Name, labelColor)
 	if e.ui.Slider("property-"+property.Name, Rect{x + propertyLabelWidth, y + 2, propertyColumnWidth - propertyLabelWidth - 10, controlHeight - 4}, &value, property.Minimum, property.Maximum, property.Step, propertyHints[property.Name]) {
 		id := e.instrument
@@ -304,7 +305,7 @@ func (e *Editor) layoutChannelPanel(area Rect) {
 	y += controlHeight + controlGap
 	threshold := layer.Threshold
 	maximum := e.document.SignalMaximum(layer.Signal)
-	step := [2]float32{0.05, 1}[boolToIndex(maximum > 1)]
+	step := [2]float32{0.05, 1}[mathx.BoolToIndex(maximum > 1)]
 	e.ui.Label(Rect{area.X, y, 90, controlHeight}, "Threshold", colorText)
 	if e.ui.Slider("threshold", Rect{area.X + 90, y + 2, area.W - 90, controlHeight - 4}, &threshold, 0, maximum, step, "The channel plays once the signal reaches this value") {
 		e.edit("threshold", func() { e.document.Layers[channel].Threshold = threshold })
@@ -335,7 +336,7 @@ func (e *Editor) layoutPreviewPanel(area Rect) {
 	for _, name := range e.document.SignalNames() {
 		value := e.signalValue(name)
 		maximum := e.document.SignalMaximum(name)
-		step := [2]float32{0.05, 1}[boolToIndex(maximum > 1)]
+		step := [2]float32{0.05, 1}[mathx.BoolToIndex(maximum > 1)]
 		e.ui.Label(Rect{area.X, y, 90, controlHeight}, name, colorText)
 		if e.ui.Slider("signal-"+name, Rect{area.X + 90, y + 2, area.W - 90, controlHeight - 4}, &value, 0, maximum, step, "Simulate this game signal to hear the adaptive layers") {
 			e.signals[name] = value
@@ -354,8 +355,8 @@ func (e *Editor) layoutStatusBar() {
 	hint := e.ui.HoverHint()
 	isMessageShown := e.messageSeconds > 0
 	defaultHint := fmt.Sprintf("Octave %d   Instrument %02d   Step %d   |   Space play   Z..M / Q..P notes   1 note off   Del clear   Ctrl+Z undo   F1 help", e.octave, e.instrument, e.step)
-	shown := [2]string{[2]string{defaultHint, hint}[boolToIndex(hint != "")], e.message}[boolToIndex(isMessageShown)]
-	tint := [2]color.Color{colorTextDim, e.messageColor}[boolToIndex(isMessageShown)]
+	shown := [2]string{[2]string{defaultHint, hint}[mathx.BoolToIndex(hint != "")], e.message}[mathx.BoolToIndex(isMessageShown)]
+	tint := [2]color.Color{colorTextDim, e.messageColor}[mathx.BoolToIndex(isMessageShown)]
 	e.ui.Text(10, statusTop+4, shown, e.ui.Regular, tint, text.AlignStart)
 }
 

@@ -2,6 +2,7 @@ package editor
 
 import (
 	"fmt"
+	"github.com/ajkula/ajkurig/mathx"
 	"image/color"
 
 	"github.com/hajimehoshi/ebiten/v2/text/v2"
@@ -67,8 +68,8 @@ func (e *Editor) layoutChannelHeader(channel int) {
 	x := float32(sidebarWidth + rowNumberWidth + channel*channelWidth)
 	rect := Rect{x, gridTop, channelWidth - 1, headerHeight - 2}
 	isCurrent := channel == e.cursorChannel
-	e.ui.Fill(rect, [2]color.Color{colorPanelLight, colorButtonHot}[boolToIndex(isCurrent)])
-	nameColor := [2]color.Color{colorText, colorAccent}[boolToIndex(isCurrent)]
+	e.ui.Fill(rect, [2]color.Color{colorPanelLight, colorButtonHot}[mathx.BoolToIndex(isCurrent)])
+	nameColor := [2]color.Color{colorText, colorAccent}[mathx.BoolToIndex(isCurrent)]
 	e.ui.Text(x+4, gridTop+3, fmt.Sprintf("%d %s", channel+1, e.document.ChannelNames[channel]), e.ui.Small, nameColor, text.AlignStart)
 	layer := e.document.Layers[channel]
 	e.ui.Text(x+4, gridTop+17, fmt.Sprintf("%s %s", layer.Signal, formatThreshold(layer.Threshold)), e.ui.Small, colorTextDim, text.AlignStart)
@@ -78,7 +79,7 @@ func (e *Editor) layoutChannelHeader(channel int) {
 		e.isStale = true
 	}
 	if e.ui.Button(Rect{x + 3 + float32(half+headerButtonGap), gridTop + 33, float32(half), 15}, "S", e.solo == channel, "Solo: hear only this channel") {
-		e.solo = [2]int{channel, noSolo}[boolToIndex(e.solo == channel)]
+		e.solo = [2]int{channel, noSolo}[mathx.BoolToIndex(e.solo == channel)]
 		e.isStale = true
 	}
 	panWidth := (channelWidth - 8) * e.document.Pans[channel]
@@ -104,7 +105,7 @@ func (e *Editor) layoutRow(pattern *song.Pattern, row, playingRow int) {
 	rowRect := Rect{sidebarWidth, y, LogicalWidth - sidebarWidth, height}
 	textY := y + (height-fontSize)/2 - 2
 	e.fillRowBackground(rowRect, row, playingRow)
-	numberColor := [2]color.Color{colorTextDim, colorAccent}[boolToIndex(row%barRows == 0)]
+	numberColor := [2]color.Color{colorTextDim, colorAccent}[mathx.BoolToIndex(row%barRows == 0)]
 	e.ui.Text(sidebarWidth+rowNumberWidth-6, textY, fmt.Sprintf("%02X", row), e.ui.Regular, numberColor, text.AlignEnd)
 	for channel := range song.Channels {
 		e.layoutCell(pattern, row, channel, y, textY)
@@ -149,7 +150,7 @@ func (e *Editor) drawCellText(cell song.Cell, x, y float32, isGhost bool) {
 	detailColors := [2]color.Color{colorAccent, colorGhost}
 	effectColors := [2]color.Color{rgb(0.55, 0.8, 1), colorGhost}
 	emptyColor := rgb(0.25, 0.27, 0.35)
-	ghost := boolToIndex(isGhost)
+	ghost := mathx.BoolToIndex(isGhost)
 	e.ui.Text(x, y, song.FormatNote(cell.Note), e.ui.Regular, pickColor(cell.Note == song.NoteEmpty, emptyColor, noteColors[ghost]), text.AlignStart)
 	e.ui.Text(x+4*charWidth, y, song.FormatInstrument(cell.Instrument), e.ui.Regular, pickColor(cell.Instrument == 0, emptyColor, detailColors[ghost]), text.AlignStart)
 	e.ui.Text(x+7*charWidth, y, song.FormatEffect(cell.Effect, cell.Parameter), e.ui.Regular, pickColor(cell.Effect == song.EffectNone, emptyColor, effectColors[ghost]), text.AlignStart)
@@ -198,7 +199,7 @@ func (e *Editor) cellAt(x, y float32, rowCount int) (int, int, int, bool) {
 	row := e.scrollRow + int((y-rowsTop)/e.rowHeight())
 	isInside := x >= sidebarWidth+rowNumberWidth && y >= rowsTop && y < rowsBottom && column < song.Channels && row < rowCount
 	offset := (x - sidebarWidth - rowNumberWidth - float32(column*channelWidth) - cellTextOffset) / charWidth
-	field := min(boolToIndex(offset >= 3.5)+boolToIndex(offset >= 6.5), fieldEffect)
+	field := min(mathx.BoolToIndex(offset >= 3.5)+mathx.BoolToIndex(offset >= 6.5), fieldEffect)
 	return row, column, field, isInside
 }
 
@@ -222,7 +223,7 @@ func (e *Editor) ensureRowVisible(row int) {
 
 func (e *Editor) rowHeight() float32 {
 	rowCount := float32(len(e.currentPattern().Rows))
-	return clamp(float32(int(gridRowsHeight/rowCount)), minimumRowH, maximumRowH)
+	return mathx.Clamp(float32(int(gridRowsHeight/rowCount)), minimumRowH, maximumRowH)
 }
 
 func (e *Editor) visibleRows() int {
@@ -248,5 +249,5 @@ func formatThreshold(value float32) string {
 }
 
 func pickColor(isEmpty bool, empty, filled color.Color) color.Color {
-	return [2]color.Color{filled, empty}[boolToIndex(isEmpty)]
+	return [2]color.Color{filled, empty}[mathx.BoolToIndex(isEmpty)]
 }

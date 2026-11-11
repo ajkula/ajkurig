@@ -1,6 +1,7 @@
 package editor
 
 import (
+	"github.com/ajkula/ajkurig/mathx"
 	"strconv"
 	"strings"
 
@@ -143,7 +144,7 @@ func (e *Editor) writeNoteIf(note int, shouldWrite bool) {
 	}
 	pattern := e.currentPattern()
 	e.cursorField, e.digitIndex = fieldNote, 0
-	row, channel, instrument := e.cursorRow, e.cursorChannel, e.instrument*boolToIndex(note >= 0)
+	row, channel, instrument := e.cursorRow, e.cursorChannel, e.instrument*mathx.BoolToIndex(note >= 0)
 	e.edit("", func() {
 		cell := &pattern.Rows[row][channel]
 		cell.Note, cell.Instrument = note, instrument
@@ -213,7 +214,7 @@ func (e *Editor) typeEffectKind(cell *song.Cell, character string) {
 	}
 	defaultParameters := map[byte]int{song.EffectArpeggio: 0x37, song.EffectVolume: song.MaximumVolume}
 	e.edit("", func() {
-		parameter := [2]int{cell.Parameter, defaultParameters[kind]}[boolToIndex(cell.Effect != kind)]
+		parameter := [2]int{cell.Parameter, defaultParameters[kind]}[mathx.BoolToIndex(cell.Effect != kind)]
 		cell.Effect, cell.Parameter = kind, parameter
 	})
 	e.digitIndex = 1
@@ -277,7 +278,7 @@ func (e *Editor) removeRow() {
 
 func (e *Editor) cursorLeft() {
 	isFirstField := e.cursorField == fieldNote
-	e.cursorChannel = (e.cursorChannel - boolToIndex(isFirstField) + song.Channels) % song.Channels
+	e.cursorChannel = (e.cursorChannel - mathx.BoolToIndex(isFirstField) + song.Channels) % song.Channels
 	e.cursorField = (e.cursorField + 2) % 3
 	e.digitIndex = 0
 	e.selection.IsActive = false
@@ -285,7 +286,7 @@ func (e *Editor) cursorLeft() {
 
 func (e *Editor) cursorRight() {
 	isLastField := e.cursorField == fieldEffect
-	e.cursorChannel = (e.cursorChannel + boolToIndex(isLastField)) % song.Channels
+	e.cursorChannel = (e.cursorChannel + mathx.BoolToIndex(isLastField)) % song.Channels
 	e.cursorField = (e.cursorField + 1) % 3
 	e.digitIndex = 0
 	e.selection.IsActive = false
@@ -413,7 +414,7 @@ func pasteRow(pattern *song.Pattern, row, channel int, cells []song.Cell) {
 }
 
 func (e *Editor) toggleHelp() {
-	e.overlay = [2]Overlay{OverlayHelp, OverlayNone}[boolToIndex(e.overlay == OverlayHelp)]
+	e.overlay = [2]Overlay{OverlayHelp, OverlayNone}[mathx.BoolToIndex(e.overlay == OverlayHelp)]
 }
 
 func (e *Editor) toggleSongMode() {

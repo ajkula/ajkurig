@@ -2,6 +2,7 @@ package audio
 
 import (
 	"fmt"
+	"github.com/ajkula/ajkurig/mathx"
 	"math"
 	"slices"
 	"strconv"
@@ -161,7 +162,7 @@ func (s *Song) SignalNames() []string {
 	names := []string{}
 	for _, layer := range s.Layers {
 		isNew := layer.SignalName != "" && layer.SignalName != AlwaysName && !slices.Contains(names, layer.SignalName)
-		names = appendIf(names, layer.SignalName, isNew)
+		names = mathx.AppendIf(names, layer.SignalName, isNew)
 	}
 	return names
 }
@@ -169,7 +170,7 @@ func (s *Song) SignalNames() []string {
 func NewTracker(song *Song, board *SignalBoard) *Tracker {
 	tracker := &Tracker{song: song, seed: 0x7AC4, pumpAge: idlePumpAge}
 	for channel, layer := range song.Layers {
-		tracker.layerSignals[channel] = board.Register([2]string{layer.SignalName, AlwaysName}[boolToIndex(layer.SignalName == "")])
+		tracker.layerSignals[channel] = board.Register([2]string{layer.SignalName, AlwaysName}[mathx.BoolToIndex(layer.SignalName == "")])
 	}
 	intensityNames := song.IntensityNames
 	if len(intensityNames) == 0 {
@@ -200,9 +201,9 @@ func (t *Tracker) Position() (int, int) {
 }
 
 func (t *Tracker) Seek(orderIndex, row int) {
-	t.orderIndex = clampInt(orderIndex, 0, len(t.song.Order)-1)
+	t.orderIndex = mathx.ClampInt(orderIndex, 0, len(t.song.Order)-1)
 	pattern := t.song.Patterns[t.song.Order[t.orderIndex]]
-	t.row = clampInt(row, 0, len(pattern.Rows)-1)
+	t.row = mathx.ClampInt(row, 0, len(pattern.Rows)-1)
 	t.tick, t.samplesUntilTick = 0, 0
 }
 
@@ -217,7 +218,7 @@ func (t *Tracker) Intensity() float32 {
 func (t *Tracker) AudibleChannelCount(threshold float32) int {
 	count := 0
 	for index := range t.channels {
-		count += boolToIndex(t.channels[index].Gain > threshold)
+		count += mathx.BoolToIndex(t.channels[index].Gain > threshold)
 	}
 	return count
 }
@@ -494,7 +495,7 @@ func (t *Tracker) processTick() {
 	}
 	t.row = 0
 	next := t.orderIndex + 1
-	t.orderIndex = next - (next-t.song.RestartOrder)*boolToIndex(next >= len(t.song.Order))
+	t.orderIndex = next - (next-t.song.RestartOrder)*mathx.BoolToIndex(next >= len(t.song.Order))
 }
 
 func (t *Tracker) playRow() {
@@ -517,7 +518,7 @@ func (t *Tracker) playCell(channel int, cell TrackerCell) {
 	settings.Volume *= cellVolume(cell)
 	t.seed++
 	state.Voice.Start(settings, t.seed*2654435761)
-	t.pumpAge *= boolToFloat(settings.Trigger == 0)
+	t.pumpAge *= mathx.BoolToFloat(settings.Trigger == 0)
 }
 
 func (state *ChannelState) updateArpeggio(cell TrackerCell) {
@@ -526,13 +527,13 @@ func (state *ChannelState) updateArpeggio(cell TrackerCell) {
 		return
 	}
 	isArpeggio := cell.Effect == effectArpeggio
-	state.ArpeggioFirst = (cell.Parameter >> 4) * boolToIndex(isArpeggio)
-	state.ArpeggioOther = (cell.Parameter & 0xF) * boolToIndex(isArpeggio)
+	state.ArpeggioFirst = (cell.Parameter >> 4) * mathx.BoolToIndex(isArpeggio)
+	state.ArpeggioOther = (cell.Parameter & 0xF) * mathx.BoolToIndex(isArpeggio)
 }
 
 func cellVolume(cell TrackerCell) float32 {
 	isVolume := cell.Effect == effectVolume
-	return 1 + (float32(min(cell.Parameter, maximumVolumeParam))/maximumVolumeParam-1)*boolToFloat(isVolume)
+	return 1 + (float32(min(cell.Parameter, maximumVolumeParam))/maximumVolumeParam-1)*mathx.BoolToFloat(isVolume)
 }
 
 func releaseIf(state *ChannelState, shouldRelease bool) {
@@ -553,13 +554,13 @@ func (t *Tracker) applyArpeggio() {
 func (t *Tracker) renderChannel(channel int) (float32, float32) {
 	state := &t.channels[channel]
 	layer := &t.song.Layers[channel]
-	target := boolToFloat(t.signals[t.layerSignals[channel]] >= layer.Threshold)
+	target := mathx.BoolToFloat(t.signals[t.layerSignals[channel]] >= layer.Threshold)
 	state.Gain += (target - state.Gain) / (layerFadeSeconds * sampleRate)
 	if !state.Voice.IsActive {
 		return 0, 0
 	}
 	left, right := state.Voice.Render()
-	pump := clamp(1-t.pumpAge/pumpSeconds, 0, 1)
+	pump := mathx.Clamp(1-t.pumpAge/pumpSeconds, 0, 1)
 	gain := state.Gain * (1 - state.Voice.Settings.Duck*pump*pump)
 	return left * gain, right * gain
 }

@@ -45,7 +45,7 @@ const (
 
 var testMaterials = []Material{
 	testGrass: {Name: "Grass", BaseColor: [3]uint8{46, 86, 44}, ColorVariation: 16},
-	testFire:  {Name: "Fire", BaseColor: [3]uint8{250, 110, 25}, ColorVariation: 70, LifetimeMinTicks: 25, LifetimeMaxTicks: 50, Emits: testHeat, Glows: true},
+	testFire:  {Name: "Fire", BaseColor: [3]uint8{250, 110, 25}, ColorVariation: 70, LifetimeMinTicks: 25, LifetimeMaxTicks: 50, Emits: testHeat, IsGlowing: true},
 	testAsh:   {Name: "Ash", BaseColor: [3]uint8{54, 52, 52}, ColorVariation: 12, LifetimeMinTicks: 200, LifetimeMaxTicks: 400},
 	testWater: {Name: "Water", BaseColor: [3]uint8{36, 84, 165}, ColorVariation: 16},
 	testIce:   {Name: "Ice", BaseColor: [3]uint8{165, 210, 240}, ColorVariation: 18, LifetimeMinTicks: 150, LifetimeMaxTicks: 250},
@@ -189,7 +189,7 @@ func TestWeatherStartsFadesAndEnds(t *testing.T) {
 	for range 60 * 15 {
 		events := weather.Update(1.0/60, &random)
 		started = started || events.HasStart
-		ended = ended || events.Ended
+		ended = ended || events.HasEnded
 		peakTemperature = max(peakTemperature, weather.Temperature())
 	}
 	if !started || !ended || peakTemperature < 0.99 {
@@ -240,8 +240,8 @@ func TestWeatherUpdateIsAdvanceThenStrike(t *testing.T) {
 	for range 60 * 15 {
 		events := combined.Update(1.0/60, &combinedRandom)
 		splitEvents := split.Advance(1.0/60, &splitRandom)
-		splitEvents.Strike = split.RollStrike(1.0/60, &splitRandom)
-		strikes += mathx.BoolToIndex(events.Strike)
+		splitEvents.HasStrike = split.RollStrike(1.0/60, &splitRandom)
+		strikes += mathx.BoolToIndex(events.HasStrike)
 		if events != splitEvents || combined.FlashSeconds != split.FlashSeconds {
 			t.Fatalf("update %+v, advance then strike %+v", events, splitEvents)
 		}

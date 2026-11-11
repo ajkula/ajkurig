@@ -18,7 +18,7 @@ type Material struct {
 	LifetimeMinTicks uint16
 	LifetimeMaxTicks uint16
 	Emits            StimulusID
-	Glows            bool
+	IsGlowing        bool
 	Tag              uint32
 }
 
@@ -106,9 +106,9 @@ func NewGround(settings GroundSettings) *Ground {
 	}
 	for material, definition := range settings.Materials {
 		ground.isActive[material] = definition.Emits != StimulusNone || definition.LifetimeMaxTicks > 0
-		ground.isGlowing[material] = definition.Glows
+		ground.isGlowing[material] = definition.IsGlowing
 	}
-	ground.Regenerate(settings.Seed, settings.Generate)
+	ground.regenerateIf(settings.Seed, settings.Generate, settings.Generate != nil)
 	return ground
 }
 
@@ -217,6 +217,13 @@ func ValueNoise(seed uint32, x, y float32) float32 {
 }
 
 // ===== Internal =====
+
+func (g *Ground) regenerateIf(seed uint32, generate func(column, row int, seed uint32) MaterialID, shouldRegenerate bool) {
+	if !shouldRegenerate {
+		return
+	}
+	g.Regenerate(seed, generate)
+}
 
 func buildTransitions(settings GroundSettings) [][]transition {
 	table := make([][]transition, max(settings.StimulusCount, FirstGameStimulus))
