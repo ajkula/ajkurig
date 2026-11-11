@@ -83,6 +83,8 @@
     "run.new_high_score": "NEW HIGH SCORE!",
     "run.rank": "RANK %s",
     "run.score": "SCORE %s",
+    "saves.damaged_set_aside": "Damaged save set aside: %s",
+    "saves.unreadable": "Save not read: %s",
     "scores.save_failed": "High scores not saved: %s",
     "settings.save_failed": "Settings not saved: %s",
     "title.audio": "AUDIO",

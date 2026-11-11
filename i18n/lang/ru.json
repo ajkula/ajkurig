@@ -83,6 +83,8 @@
     "run.new_high_score": "НОВЫЙ РЕКОРД!",
     "run.rank": "МЕСТО %s",
     "run.score": "СЧЁТ %s",
+    "saves.damaged_set_aside": "Повреждённое сохранение отложено: %s",
+    "saves.unreadable": "Сохранение не прочитано: %s",
     "scores.save_failed": "Рекорды не сохранены: %s",
     "settings.save_failed": "Настройки не сохранены: %s",
     "title.audio": "ЗВУК",

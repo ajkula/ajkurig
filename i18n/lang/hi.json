@@ -83,6 +83,8 @@
     "run.new_high_score": "नया उच्च स्कोर!",
     "run.rank": "रैंक %s",
     "run.score": "स्कोर %s",
+    "saves.damaged_set_aside": "खराब सेव अलग रखा गया: %s",
+    "saves.unreadable": "सेव पढ़ा नहीं जा सका: %s",
     "scores.save_failed": "स्कोर सहेजे नहीं गए: %s",
     "settings.save_failed": "सेटिंग्स सहेजी नहीं गईं: %s",
     "title.audio": "ऑडियो",

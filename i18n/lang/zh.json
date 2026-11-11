@@ -83,6 +83,8 @@
     "run.new_high_score": "新纪录!",
     "run.rank": "排名 %s",
     "run.score": "得分 %s",
+    "saves.damaged_set_aside": "已隔离损坏的存档：%s",
+    "saves.unreadable": "存档无法读取：%s",
     "scores.save_failed": "最高分未保存：%s",
     "settings.save_failed": "设置未保存：%s",
     "title.audio": "音频",

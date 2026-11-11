@@ -83,6 +83,8 @@
     "run.new_high_score": "رقم قياسي جديد!",
     "run.rank": "المرتبة %s",
     "run.score": "النتيجة %s",
+    "saves.damaged_set_aside": "نقل حفظ تالف جانبا: %s",
+    "saves.unreadable": "تعذرت قراءة الحفظ: %s",
     "scores.save_failed": "لم تحفظ النتائج: %s",
     "settings.save_failed": "لم تحفظ الإعدادات: %s",
     "title.audio": "الصوت",

@@ -83,6 +83,8 @@
     "run.new_high_score": "¡NUEVO RÉCORD!",
     "run.rank": "PUESTO %s",
     "run.score": "PUNTOS %s",
+    "saves.damaged_set_aside": "Partida dañada apartada: %s",
+    "saves.unreadable": "Partida no leída: %s",
     "scores.save_failed": "Puntuaciones no guardadas: %s",
     "settings.save_failed": "Ajustes no guardados: %s",
     "title.audio": "AUDIO",

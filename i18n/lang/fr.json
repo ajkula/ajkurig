@@ -83,6 +83,8 @@
     "run.new_high_score": "NOUVEAU RECORD !",
     "run.rank": "RANG %s",
     "run.score": "SCORE %s",
+    "saves.damaged_set_aside": "Sauvegarde abîmée mise de côté : %s",
+    "saves.unreadable": "Sauvegarde illisible : %s",
     "scores.save_failed": "Scores non enregistrés : %s",
     "settings.save_failed": "Réglages non enregistrés : %s",
     "title.audio": "AUDIO",

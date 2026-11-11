@@ -1,6 +1,7 @@
 package rig
 
 import (
+	"errors"
 	"io/fs"
 	"os"
 	"path/filepath"
@@ -81,6 +82,8 @@ type App struct {
 	hintDevice      input.Device
 }
 
+type saveProblem int
+
 // ===== Constants =====
 
 const (
@@ -91,7 +94,20 @@ const (
 	menuEffectsVolume     = 0.45
 	gameEffectsVolume     = 0.8
 	maximumMusicVolume    = 0.5
+	saveProblemSeparator  = "  ·  "
 )
+
+const (
+	saveProblemNone saveProblem = iota
+	saveProblemDamaged
+	saveProblemUnreadable
+	saveProblemCount
+)
+
+var saveProblemMessages = [saveProblemCount]string{
+	saveProblemDamaged:    "saves.damaged_set_aside",
+	saveProblemUnreadable: "saves.unreadable",
+}
 
 var menuEventSounds = [ui.MenuEventCount]audio.SoundID{
 	ui.EventMoved: audio.SoundMenuMove, ui.EventAdjusted: audio.SoundMenuMove, ui.EventDrumMoved: audio.SoundMenuMove,
@@ -116,13 +132,14 @@ func NewApp(config Config) *App {
 	_ = i18n.Load(config.Languages, languageDirectories()...)
 	app.Kit = ui.NewKit(config.Theme, config.Fonts, config.Width, config.Height)
 	app.Input = input.NewReader(newLayout(config))
-	app.loadBindings()
+	bindingsError := app.loadBindings()
 	app.Audio = newEngine(config)
 	app.Audio.SetSongs(config.Songs)
 	app.Jukebox = NewJukebox(app)
 	app.Bench = NewBench(app)
-	app.Scores, _ = scores.Load(app.Store, config.ScoreTableSize)
-	app.loadSettings()
+	table, scoresError := scores.Load(app.Store, config.ScoreTableSize)
+	app.Scores = table
+	app.ReportSaveProblems(bindingsError, scoresError, app.loadSettings())
 	return app
 }
 
@@ -233,6 +250,19 @@ func (a *App) PreviewLanguage(code string) {
 	i18n.Use(code)
 	a.Kit.Text.ResetFaces()
 	a.refreshHints()
+}
+
+func (a *App) ReportSaveProblems(loadErrors ...error) {
+	var problems [saveProblemCount][]string
+	for _, err := range loadErrors {
+		kind, fileName := classifySaveProblem(err)
+		problems[kind] = append(problems[kind], fileName)
+	}
+	messages := mathx.AppendIf(make([]string, 0, saveProblemCount), a.Message, a.Message != "")
+	for kind := saveProblemNone + 1; kind < saveProblemCount; kind++ {
+		messages = mathx.AppendIf(messages, i18n.F(saveProblemMessages[kind], strings.Join(problems[kind], ", ")), len(problems[kind]) > 0)
+	}
+	a.Message = strings.Join(messages, saveProblemSeparator)
 }
 
 func (a *App) SaveScores() {
@@ -355,15 +385,18 @@ func languageDirectories() []string {
 	return directories
 }
 
-func (a *App) loadBindings() {
+func (a *App) loadBindings() error {
 	bindings, err := input.LoadBindings(a.Store, a.Input.Layout())
 	a.Input.UseBindings(bindings)
 	a.BindingsMessage = mathx.Pick(err != nil, "remap.custom_loaded", "remap.default_loaded")
+	return err
 }
 
-func (a *App) loadSettings() {
-	a.Settings, _ = LoadSettings(a.Store)
+func (a *App) loadSettings() error {
+	settings, err := LoadSettings(a.Store)
+	a.Settings = settings
 	a.ApplySettings()
+	return err
 }
 
 func (a *App) refreshHints() {
@@ -418,4 +451,18 @@ func callIf(action func()) {
 		return
 	}
 	action()
+}
+
+func classifySaveProblem(err error) (saveProblem, string) {
+	var damaged *store.DamagedError
+	var unreadable *fs.PathError
+	switch {
+	case err == nil || errors.Is(err, fs.ErrNotExist):
+		return saveProblemNone, ""
+	case errors.As(err, &damaged):
+		return saveProblemDamaged, damaged.KeptAs
+	case errors.As(err, &unreadable):
+		return saveProblemUnreadable, filepath.Base(unreadable.Path)
+	}
+	return saveProblemNone, ""
 }

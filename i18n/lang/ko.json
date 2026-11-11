@@ -83,6 +83,8 @@
     "run.new_high_score": "최고 점수 갱신!",
     "run.rank": "순위 %s",
     "run.score": "점수 %s",
+    "saves.damaged_set_aside": "손상된 저장 파일을 따로 보관했습니다: %s",
+    "saves.unreadable": "저장 파일을 읽지 못했습니다: %s",
     "scores.save_failed": "기록이 저장되지 않았습니다: %s",
     "settings.save_failed": "설정이 저장되지 않았습니다: %s",
     "title.audio": "오디오",
