@@ -76,7 +76,7 @@ type Effects struct {
 	ShakeY        float32
 	ShakeFactor   float32
 	Density       float32
-	Viewport      *draw.Camera
+	view          *draw.Camera
 	random        rng.Random
 }
 
@@ -275,6 +275,7 @@ func (e *Effects) Clear() {
 }
 
 func (e *Effects) Queue(batches *draw.Batches, camera *draw.Camera) {
+	e.view = camera
 	e.queueSkids(batches, camera)
 	e.queueSmokes(batches, camera)
 	e.queueParticles(batches, camera)
@@ -295,7 +296,7 @@ func (e *Effects) DrawPopups(screen *ebiten.Image, kit *ui.Kit, camera *draw.Cam
 func (e *Effects) spawnParticle(x, y, velocityX, velocityY, life, size float32, color colorx.RGB) {
 	isThinnedOut := e.random.Float() >= e.Density
 	isFull := float32(e.ParticleCount) >= maximumParticles*e.Density
-	isOutOfView := e.Viewport != nil && !e.Viewport.IsVisible(x, y, particleViewReach)
+	isOutOfView := e.view != nil && !e.view.IsVisible(x, y, particleViewReach)
 	if isFull || isThinnedOut || isOutOfView {
 		return
 	}

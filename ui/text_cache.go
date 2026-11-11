@@ -51,13 +51,12 @@ func (t *Text) drawCached(screen *ebiten.Image, message string, kind FaceKind, s
 	originX, originY := math.Floor(scaledX), math.Floor(scaledY)
 	key := textKey{Message: message, Kind: kind, Ink: ink, Align: align, SubpixelX: subpixelStep(scaledX - originX), SubpixelY: subpixelStep(scaledY - originY)}
 	entry, isCached := t.cache[key]
-	wasSeen := isCached || t.recordSighting(key)
-	if !wasSeen {
-		t.drawDirect(screen, message, kind, scaledX, scaledY, ink, 1, align)
-		return
+	if !isCached {
+		entry, isCached = t.cacheIfSeenBefore(key)
 	}
 	if !isCached {
-		entry = t.renderCached(key)
+		t.drawDirect(screen, message, kind, scaledX, scaledY, ink, 1, align)
+		return
 	}
 	entry.IsUsed = true
 	options := &t.blitOptions
@@ -66,13 +65,20 @@ func (t *Text) drawCached(screen *ebiten.Image, message string, kind FaceKind, s
 	screen.DrawImage(entry.Image, options)
 }
 
-func (t *Text) recordSighting(key textKey) bool {
-	wasSeen := t.sightings[key]
+func (t *Text) cacheIfSeenBefore(key textKey) (*cachedText, bool) {
+	if !t.sightings[key] {
+		t.recordSighting(key)
+		return nil, false
+	}
+	delete(t.sightings, key)
+	return t.renderCached(key), true
+}
+
+func (t *Text) recordSighting(key textKey) {
 	if len(t.sightings) >= maximumTextSightings {
 		clear(t.sightings)
 	}
 	t.sightings[key] = true
-	return wasSeen
 }
 
 func (t *Text) renderCached(key textKey) *cachedText {

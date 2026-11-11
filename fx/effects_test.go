@@ -35,9 +35,14 @@ func TestSparksTowardAnAngleStayInsideTheSpread(t *testing.T) {
 	}
 }
 
-func TestSparksFarOutsideTheViewportAreNotSpawned(t *testing.T) {
+func TestSparksFarOutsideTheDrawnViewAreNotSpawned(t *testing.T) {
 	effects := NewEffects(3)
-	effects.Viewport = &draw.Camera{X: 1000, Y: 1000, Width: 1280, Height: 720}
+	effects.SpawnSparks(200, 200, 20, colorx.Keppel, 100)
+	if effects.ParticleCount != 20 {
+		t.Fatalf("%d sparks before any camera was drawn, want 20", effects.ParticleCount)
+	}
+	effects.Clear()
+	effects.Queue(draw.NewBatches(), &draw.Camera{X: 1000, Y: 1000, Width: 1280, Height: 720})
 	effects.SpawnSparks(1500, 1300, 20, colorx.Keppel, 100)
 	effects.SpawnSparks(1000+1280+particleViewReach-10, 1300, 20, colorx.Keppel, 100)
 	if effects.ParticleCount != 40 {
@@ -56,7 +61,7 @@ func TestParticleCeilingFollowsTheDensity(t *testing.T) {
 	for range maximumParticles {
 		effects.SpawnSparks(0, 0, 10, colorx.Keppel, 100)
 	}
-	if limit := int(maximumParticles * 0.3); effects.ParticleCount > limit || effects.ParticleCount < limit-1 {
-		t.Fatalf("%d particles at density 0.3, want about %d", effects.ParticleCount, limit)
+	if limit := int(maximumParticles * 0.3); effects.ParticleCount != limit {
+		t.Fatalf("%d particles at density 0.3, want %d", effects.ParticleCount, limit)
 	}
 }
