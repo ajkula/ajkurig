@@ -8,6 +8,7 @@ import (
 	"regexp"
 	"slices"
 	"strings"
+	"sync"
 	"testing"
 	"testing/fstest"
 )
@@ -17,6 +18,11 @@ import (
 var keyPattern = regexp.MustCompile(`(?:i18n\.(?:T|F|TOr)|Label|OnOffLabel|Hint)\("([a-z_]+\.[a-z0-9_.]+)"`)
 
 var placeholderPattern = regexp.MustCompile(`%[-0-9.]*[a-zA-Z]|\{[a-z]+\}`)
+
+const (
+	concurrentWorkers = 4
+	concurrentRounds  = 25
+)
 
 // ===== Public API =====
 
@@ -41,7 +47,7 @@ func TestTranslationsKeepPlaceholders(t *testing.T) {
 	if err := Load(nil); err != nil {
 		t.Fatal(err)
 	}
-	english := languages[FallbackCode]
+	english := active.Load().languages[FallbackCode]
 	for _, language := range Languages() {
 		for key, text := range language.Strings {
 			expected := placeholderPattern.FindAllString(english.Strings[key], -1)
@@ -67,7 +73,7 @@ func TestGameFilesOverrideAndAddLanguages(t *testing.T) {
 		t.Fatalf("override failed: %q %q %q", T("menu.play"), T("game.only"), T("menu.quit"))
 	}
 	Use("eo")
-	if T("menu.play") != "Ludi" || T("menu.quit") != languages[FallbackCode].Strings["menu.quit"] {
+	if T("menu.play") != "Ludi" || T("menu.quit") != active.Load().languages[FallbackCode].Strings["menu.quit"] {
 		t.Fatal("a new language does not fall back to English for missing keys")
 	}
 	if !Use("xx") && Current().Code != FallbackCode {
@@ -88,8 +94,8 @@ func TestMissingKeysFallBackToEnglishThenToTheKey(t *testing.T) {
 		t.Fatal(err)
 	}
 	Use("fr")
-	delete(languages["fr"].Strings, "menu.play")
-	if T("menu.play") != languages[FallbackCode].Strings["menu.play"] || T("no.such.key") != "no.such.key" || TOr("no.such.key", "x") != "x" {
+	delete(active.Load().languages["fr"].Strings, "menu.play")
+	if T("menu.play") != active.Load().languages[FallbackCode].Strings["menu.play"] || T("no.such.key") != "no.such.key" || TOr("no.such.key", "x") != "x" {
 		t.Fatalf("fallbacks: %q %q", T("menu.play"), T("no.such.key"))
 	}
 	if Use("xx") || Current().Code != FallbackCode {
@@ -116,7 +122,7 @@ func TestExternalFilesAddAndOverrideLanguages(t *testing.T) {
 	if err := Load(nil, directory); err != nil {
 		t.Fatal(err)
 	}
-	english := languages[FallbackCode].Strings
+	english := active.Load().languages[FallbackCode].Strings
 	Use("pt")
 	if T("menu.play") != "Jogar" || T("menu.quit") != english["menu.quit"] {
 		t.Fatalf("external language: %q %q", T("menu.play"), T("menu.quit"))
@@ -131,10 +137,28 @@ func TestExternalFilesAddAndOverrideLanguages(t *testing.T) {
 	}
 }
 
+func TestLoadingWhileTranslatingStaysConsistent(t *testing.T) {
+	var workers sync.WaitGroup
+	for range concurrentWorkers {
+		workers.Go(func() {
+			for range concurrentRounds {
+				_ = Load(nil)
+				Use(FallbackCode)
+				_ = T("menu.play") + Current().Code + F("hud.level", 3)
+				_ = IsRightToLeft() || HasKey(FallbackCode, "menu.play")
+			}
+		})
+	}
+	workers.Wait()
+	if T("menu.play") != active.Load().languages[FallbackCode].Strings["menu.play"] {
+		t.Fatalf("concurrent loads left %q", T("menu.play"))
+	}
+}
+
 func TestNothingCrashesWithoutLanguages(t *testing.T) {
-	saved, savedCurrent, savedFallback := languages, current, fallback
-	defer func() { languages, current, fallback = saved, savedCurrent, savedFallback }()
-	languages, current, fallback = map[string]*Language{}, nil, nil
+	saved := active.Load()
+	defer active.Store(saved)
+	active.Store(newCatalog())
 	if T("menu.play") != "menu.play" || F("hud.level", 3) == "" || Current().Code != FallbackCode || Use("fr") {
 		t.Fatal("empty catalog misbehaved")
 	}

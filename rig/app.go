@@ -25,6 +25,7 @@ import (
 type Config struct {
 	Title           string
 	WindowTitle     string
+	SaveDirectory   string
 	SaveFolder      string
 	Width           float32
 	Height          float32
@@ -120,7 +121,7 @@ func NewApp(config Config) *App {
 	config = withDefaults(config)
 	app := &App{
 		Config:  config,
-		Store:   store.ForApplication(config.SaveFolder),
+		Store:   config.SaveStore(),
 		World:   NewRack("world"),
 		Global:  NewRack("global"),
 		screens: map[string]Screen{},
@@ -343,6 +344,10 @@ func (a *App) Layout(outsideWidth, outsideHeight int) (int, int) {
 
 func (a *App) ToggleMusic() {
 	a.ChangeSettings(func(settings *Settings) { settings.IsMusicOn = !settings.IsMusicOn })
+}
+
+func (c *Config) SaveStore() store.Store {
+	return mathx.Pick(c.SaveDirectory == "", store.InDirectory(c.SaveDirectory), store.ForApplication(c.SaveFolder))
 }
 
 // ===== Internal =====

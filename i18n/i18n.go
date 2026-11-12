@@ -11,6 +11,7 @@ import (
 	"path/filepath"
 	"slices"
 	"strings"
+	"sync/atomic"
 )
 
 // ===== Types =====
@@ -20,6 +21,12 @@ type Language struct {
 	Name    string            `json:"name"`
 	Script  string            `json:"script"`
 	Strings map[string]string `json:"strings"`
+}
+
+type catalog struct {
+	languages map[string]*Language
+	current   *Language
+	fallback  *Language
 }
 
 // ===== Constants =====
@@ -36,11 +43,7 @@ const (
 //go:embed lang/*.json
 var frameworkLanguages embed.FS
 
-var (
-	languages = map[string]*Language{}
-	current   *Language
-	fallback  *Language
-)
+var active = newActiveCatalog()
 
 // ===== Public API =====
 
@@ -50,20 +53,22 @@ func FrameworkSource() fs.FS {
 }
 
 func Load(sources []fs.FS, externalDirectories ...string) error {
-	clear(languages)
-	problems := []error{loadSource(FrameworkSource())}
+	loaded := newCatalog()
+	problems := []error{loaded.loadSource(FrameworkSource())}
 	for _, source := range sources {
-		problems = append(problems, loadSource(source))
+		problems = append(problems, loaded.loadSource(source))
 	}
 	for _, directory := range externalDirectories {
-		loadDirectory(filepath.Join(directory, externalFolder))
+		loaded.loadDirectory(filepath.Join(directory, externalFolder))
 	}
-	fallback = languages[FallbackCode]
-	current = fallback
+	loaded.fallback = loaded.languages[FallbackCode]
+	loaded.current = loaded.fallback
+	active.Store(loaded)
 	return errors.Join(problems...)
 }
 
 func Languages() []Language {
+	languages := active.Load().languages
 	list := make([]Language, 0, len(languages))
 	for _, language := range languages {
 		list = append(list, *language)
@@ -73,16 +78,23 @@ func Languages() []Language {
 }
 
 func Use(code string) bool {
-	language, exists := languages[code]
-	current = [2]*Language{fallback, language}[mathx.BoolToIndex(exists)]
-	return exists
+	for {
+		snapshot := active.Load()
+		language, exists := snapshot.languages[code]
+		switched := &catalog{languages: snapshot.languages, fallback: snapshot.fallback, current: mathx.Pick(exists, snapshot.fallback, language)}
+		if active.CompareAndSwap(snapshot, switched) {
+			return exists
+		}
+	}
 }
 
 func IsRightToLeft() bool {
+	current := active.Load().current
 	return current != nil && rightToLeftScripts[current.Script]
 }
 
 func Current() Language {
+	current := active.Load().current
 	if current == nil {
 		return Language{Code: FallbackCode, Name: "English", Script: "latin"}
 	}
@@ -90,12 +102,12 @@ func Current() Language {
 }
 
 func Has(code string) bool {
-	_, exists := languages[code]
+	_, exists := active.Load().languages[code]
 	return exists
 }
 
 func HasKey(code, key string) bool {
-	_, exists := lookup(languages[code], key)
+	_, exists := lookup(active.Load().languages[code], key)
 	return exists
 }
 
@@ -104,10 +116,11 @@ func T(key string) string {
 }
 
 func TOr(key, missing string) string {
-	if text, exists := lookup(current, key); exists {
+	snapshot := active.Load()
+	if text, exists := lookup(snapshot.current, key); exists {
 		return text
 	}
-	if text, exists := lookup(fallback, key); exists {
+	if text, exists := lookup(snapshot.fallback, key); exists {
 		return text
 	}
 	return missing
@@ -133,6 +146,16 @@ func Detect() string {
 
 // ===== Internal =====
 
+func newActiveCatalog() *atomic.Pointer[catalog] {
+	var pointer atomic.Pointer[catalog]
+	pointer.Store(newCatalog())
+	return &pointer
+}
+
+func newCatalog() *catalog {
+	return &catalog{languages: map[string]*Language{}}
+}
+
 func lookup(language *Language, key string) (string, bool) {
 	if language == nil {
 		return "", false
@@ -141,7 +164,7 @@ func lookup(language *Language, key string) (string, bool) {
 	return text, exists && text != ""
 }
 
-func loadSource(source fs.FS) error {
+func (c *catalog) loadSource(source fs.FS) error {
 	if source == nil {
 		return nil
 	}
@@ -151,15 +174,15 @@ func loadSource(source fs.FS) error {
 	}
 	var problems []error
 	for _, path := range paths {
-		problems = append(problems, registerFile(source, path))
+		problems = append(problems, c.registerFile(source, path))
 	}
 	return errors.Join(problems...)
 }
 
-func registerFile(source fs.FS, path string) error {
+func (c *catalog) registerFile(source fs.FS, path string) error {
 	data, err := fs.ReadFile(source, path)
 	if err == nil {
-		err = register(data)
+		err = c.register(data)
 	}
 	if err != nil {
 		return fmt.Errorf("%s: %w", path, err)
@@ -167,18 +190,18 @@ func registerFile(source fs.FS, path string) error {
 	return nil
 }
 
-func loadDirectory(directory string) {
+func (c *catalog) loadDirectory(directory string) {
 	paths, _ := filepath.Glob(filepath.Join(directory, languagePattern))
 	for _, path := range paths {
 		data, err := os.ReadFile(path)
 		if err != nil {
 			continue
 		}
-		_ = register(data)
+		_ = c.register(data)
 	}
 }
 
-func register(data []byte) error {
+func (c *catalog) register(data []byte) error {
 	var language Language
 	if err := json.Unmarshal(data, &language); err != nil {
 		return err
@@ -189,7 +212,7 @@ func register(data []byte) error {
 	if language.Strings == nil {
 		language.Strings = map[string]string{}
 	}
-	existing, isOverride := languages[language.Code]
+	existing, isOverride := c.languages[language.Code]
 	if isOverride {
 		mergeLanguage(existing, &language)
 		return nil
@@ -197,7 +220,7 @@ func register(data []byte) error {
 	if language.Name == "" {
 		return fmt.Errorf("a new language needs a name")
 	}
-	languages[language.Code] = &language
+	c.languages[language.Code] = &language
 	return nil
 }
 

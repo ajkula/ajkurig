@@ -38,3 +38,11 @@ func TestMissingSavesLeaveTheMessageAlone(t *testing.T) {
 		t.Fatalf("a first launch changed the message to %q", app.Message)
 	}
 }
+
+func TestSaveDirectoryReplacesTheSystemFolder(t *testing.T) {
+	directory := t.TempDir()
+	app := NewApp(Config{Title: "Test", SaveDirectory: directory, IsSilent: true})
+	if app.Store.Directory != directory {
+		t.Fatalf("saves go to %q instead of %q", app.Store.Directory, directory)
+	}
+}
