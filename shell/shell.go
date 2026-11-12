@@ -29,8 +29,13 @@ type RunStatus struct {
 	PendingLevelUps int
 	Stats           map[string]int
 	Summary         string
-	Details         string
+	Tallies         []RunTally
 	KilledBy        []DamageCause
+}
+
+type RunTally struct {
+	Label string
+	Count int
 }
 
 type Game interface {
@@ -55,6 +60,7 @@ type Column struct {
 type Options struct {
 	Title           string
 	GameOverTitle   string
+	TalliesTitle    string
 	RankingTitle    string
 	Columns         []Column
 	DemoClipSeconds float32

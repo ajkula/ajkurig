@@ -43,8 +43,17 @@ const (
 	nameEntryArrowSize    = 18
 	nameEntryArrowGap     = 14
 	nameEntryUnderlineGap = 96
-	gameOverRankedTop     = 400
-	gameOverDetailsTop    = 345
+	gameOverTitleTop      = 46
+	gameOverScoreTop      = 136
+	gameOverRankTop       = 226
+	gameOverSummaryTop    = 271
+	gameOverRankedTop     = 376
+	gameOverPanelsTop     = 440
+	gameOverChoicesTop    = 640
+	talliesLeft           = 60
+	talliesWidth          = 660
+	talliesColumns        = 3
+	talliesCountGap       = 36
 )
 
 // ===== Public API =====
@@ -164,7 +173,7 @@ func (n *NameEntryScreen) Draw(frame *rig.Frame, screen *ebiten.Image) {
 	for index, letter := range n.Entry.Letters {
 		n.drawInitial(screen, kit, index, string(letter))
 	}
-	shell.drawKilledBy(screen)
+	shell.drawKilledBy(screen, killedByTop)
 	kit.Hints(screen, app.Hint("hint.name_entry"))
 }
 
@@ -198,20 +207,20 @@ func (g *GameOverScreen) Draw(frame *rig.Frame, screen *ebiten.Image) {
 	theme := kit.Theme
 	app.DrawWorld(frame, screen)
 	kit.Dim(screen, 0.7)
-	kit.Text.Draw(screen, i18n.T(shell.Options.GameOverTitle), ui.FaceTitle, kit.Width/2, 70, theme.Warning, 1, text.AlignCenter)
-	kit.Text.Draw(screen, i18n.F("run.score", scores.FormatThousands(shell.RunStatus.Score)), ui.FaceTitle, kit.Width/2, 160, theme.Accent, 1, text.AlignCenter)
+	kit.Text.Draw(screen, i18n.T(shell.Options.GameOverTitle), ui.FaceTitle, kit.Width/2, gameOverTitleTop, theme.Warning, 1, text.AlignCenter)
+	kit.Text.Draw(screen, i18n.F("run.score", scores.FormatThousands(shell.RunStatus.Score)), ui.FaceTitle, kit.Width/2, gameOverScoreTop, theme.Accent, 1, text.AlignCenter)
 	isRanked := shell.NewEntryRank != scores.NoRank
 	rankState := mathx.BoolToIndex(isRanked) + mathx.BoolToIndex(shell.NewEntryRank == 0)
 	lines := [3]string{shell.HighScoreLine(), i18n.F("gameover.ranked", scores.Ordinal(max(0, shell.NewEntryRank))), i18n.T("run.new_high_score")}
 	alpha := ui.Pulse(frame.Clock)*mathx.BoolToFloat(isRanked) + mathx.BoolToFloat(!isRanked)
-	kit.Text.Draw(screen, lines[rankState], ui.FaceBold, kit.Width/2, 250, mathx.Pick(isRanked, theme.Record, theme.Accent), alpha, text.AlignCenter)
-	kit.Text.Draw(screen, shell.RunStatus.Summary, ui.FaceBold, kit.Width/2, 295, theme.Text, 1, text.AlignCenter)
-	kit.Text.Draw(screen, mathx.Pick(isRanked, shell.RunStatus.Details, ""), ui.FaceRegular, kit.Width/2, gameOverDetailsTop, theme.Text, 1, text.AlignCenter)
+	kit.Text.Draw(screen, lines[rankState], ui.FaceBold, kit.Width/2, gameOverRankTop, mathx.Pick(isRanked, theme.Record, theme.Accent), alpha, text.AlignCenter)
+	kit.Text.Draw(screen, shell.RunStatus.Summary, ui.FaceBold, kit.Width/2, gameOverSummaryTop, theme.Text, 1, text.AlignCenter)
 	shell.drawRankedLine(frame, screen, gameOverRankedTop)
-	shell.drawKilledBy(screen)
+	shell.drawKilledBy(screen, gameOverPanelsTop)
+	shell.drawTallies(screen, gameOverPanelsTop)
 	kit.Message(screen, app.Message)
 	choices := i18n.F("gameover.choices", app.Input.ButtonLabel(input.ActionStart), app.Input.ButtonLabel(input.ActionSelect))
-	kit.Text.Draw(screen, choices, ui.FaceBold, kit.Width/2, 600, theme.Accent, 1, text.AlignCenter)
+	kit.Text.Draw(screen, choices, ui.FaceBold, kit.Width/2, gameOverChoicesTop, theme.Accent, 1, text.AlignCenter)
 }
 
 // ===== Internal =====
@@ -230,4 +239,24 @@ func (n *NameEntryScreen) drawInitial(screen *ebiten.Image, kit *ui.Kit, index i
 	bottom := float32(nameEntryLetterTop) + nameEntryUnderlineGap + nameEntryArrowGap
 	draw.FillTriangle(screen, [3][2]float32{{x - half, top}, {x + half, top}, {x, top - half}}, kit.Theme.Accent, 1)
 	draw.FillTriangle(screen, [3][2]float32{{x - half, bottom}, {x + half, bottom}, {x, bottom + half}}, kit.Theme.Accent, 1)
+}
+
+func (s *Shell) drawTallies(screen *ebiten.Image, top float32) {
+	tallies := s.RunStatus.Tallies
+	if len(tallies) == 0 {
+		return
+	}
+	kit := s.App.Kit
+	tint, rim := kit.Theme.Text, kit.Theme.Outline
+	span := ui.MirrorSpan{Left: talliesLeft, Right: talliesLeft + talliesWidth}
+	startAlign, endAlign := ui.MirrorAlign(text.AlignStart), ui.MirrorAlign(text.AlignEnd)
+	kit.Text.DrawOutlined(screen, i18n.T(s.Options.TalliesTitle), ui.FaceBold, span.X(talliesLeft), top, kit.Theme.Accent, rim, startAlign)
+	rows := (len(tallies) + talliesColumns - 1) / talliesColumns
+	columnWidth := float32(talliesWidth) / talliesColumns
+	for index, tally := range tallies {
+		left := talliesLeft + float32(index/rows)*columnWidth
+		y := top + float32(index%rows+1)*killedByRowHeight + 6
+		kit.Text.DrawOutlined(screen, tally.Label, ui.FaceRegular, span.X(left), y, tint, rim, startAlign)
+		kit.Text.DrawOutlined(screen, scores.FormatThousands(tally.Count), ui.FaceRegular, span.X(left+columnWidth-talliesCountGap), y, tint, rim, endAlign)
+	}
 }

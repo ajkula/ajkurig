@@ -41,7 +41,7 @@ const (
 	killedByRight              = 60
 	killedByWidth              = 380
 	killedByTop                = 458
-	killedByRowHeight          = 28
+	killedByRowHeight          = 31
 	killedByHitsColumn         = 110
 	killedByMaximumRows        = 4
 	continuousGapTicks         = 2
@@ -115,7 +115,7 @@ func addToCause(causes []DamageCause, event damageEvent) []DamageCause {
 	return causes
 }
 
-func (s *Shell) drawKilledBy(screen *ebiten.Image) {
+func (s *Shell) drawKilledBy(screen *ebiten.Image, top float32) {
 	causes := s.RunStatus.KilledBy
 	if len(causes) == 0 {
 		return
@@ -127,9 +127,9 @@ func (s *Shell) drawKilledBy(screen *ebiten.Image) {
 	titleIndent := kit.Text.Width(killedByTitleIndentSample, ui.FaceBold)
 	span := ui.MirrorSpan{Left: left, Right: right}
 	startAlign, endAlign := ui.MirrorAlign(text.AlignStart), ui.MirrorAlign(text.AlignEnd)
-	kit.Text.DrawOutlined(screen, i18n.T(killedByTitleKey), ui.FaceBold, span.X(left+titleIndent), killedByTop, tint, rim, startAlign)
+	kit.Text.DrawOutlined(screen, i18n.T(killedByTitleKey), ui.FaceBold, span.X(left+titleIndent), top, tint, rim, startAlign)
 	for row, cause := range causes[:min(len(causes), killedByMaximumRows)] {
-		y := killedByTop + float32(row+1)*killedByRowHeight + 6
+		y := top + float32(row+1)*killedByRowHeight + 6
 		kit.Text.DrawOutlined(screen, i18n.T(cause.Source), ui.FaceRegular, span.X(left), y, tint, rim, startAlign)
 		kit.Text.DrawOutlined(screen, hitsLabel(cause.Hits), ui.FaceRegular, span.X(right-killedByHitsColumn), y, tint, rim, endAlign)
 		kit.Text.DrawOutlined(screen, strconv.Itoa(int(cause.Damage+0.5)), ui.FaceRegular, span.X(right), y, tint, rim, endAlign)
